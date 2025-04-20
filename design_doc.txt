@@ -1,0 +1,118 @@
+**微信小程序：“[教练姓名]职业发展辅导”预约系统 - 开发设计文档概要**
+
+**1. 目标与范围回顾**
+
+* **目标：** 设计并实现一个简单、可靠的微信小程序及配套后端服务，满足单一教练的课时发布、学员预约、取消及提醒功能。
+* **核心流程：** 教练设置可用时间 -> 学员查看并预约 -> 系统处理预约与通知 -> 学员管理个人预约。
+
+**2. 系统架构**
+
+* **架构选择：** 选项 B - 小程序前端 + 自建服务器后端 + 数据库。
+* **组件：**
+    * **微信小程序前端：** 负责用户界面、交互逻辑、向后端API发起请求。
+    * **后端 API 服务器：** 运行在本地 Windows 系统上，处理业务逻辑、数据库操作、权限验证、触发通知。
+    * **数据库：** 同样运行在本地 Windows 系统上，存储所有业务数据。
+* **部署模型：** 后端服务和数据库部署在开发者指定的本地 Windows 机器上。
+    * **注意：** 此部署模型意味着需要确保该 Windows 机器的持续运行、网络连接（公网可访问，可能需要配置防火墙、端口转发、DDNS）、安全防护和定期维护。对于公开服务，这通常不是推荐的生产环境部署方式，但按要求设计。
+
+**3. 技术选型**
+
+* **小程序前端：** 采用 **微信小程序原生开发** (WXML/WXSS/JS)，以最小化工程量。
+* **后端 API 服务器：** (建议) 选用 **Node.js + Express.js** 框架。理由：JavaScript 技术栈统一，开发效率高，适合快速构建 API，有大量成熟库支持。
+* **数据库：** (建议) 选用 **SQLite** 或 **MongoDB**。
+    * **SQLite:** 文件型数据库，配置简单，适合单机低并发场景，备份方便。
+    * **MongoDB:** NoSQL 数据库，文档型存储与 JSON 契合度高，适合 JavaScript 开发。
+    * *请确认选用哪种数据库，或提出其他选择。*
+
+**4. 数据模型设计**
+
+* **数据库 & 集合/表：** (采用之前确认的设计)
+    * `AvailabilitySlots`: `_id`, `coachId`, `startTime`, `endTime`, `status` ('available', 'booked'), `bookingId` (nullable), `userId` (nullable)
+    * `Bookings`: `_id`, `userId`, `coachId`, `slotId`, `startTime`, `endTime`, `status` ('confirmed', 'cancelled_by_user', 'cancelled_by_coach'), `createdAt`
+    * `CoachConfig`: `_id`, `coachId`, `weeklyTemplate` (JSON Object), `sessionDurationMinutes` (Number)
+    * `Users`: `_id` (学员 OpenID), `nickName`
+* **数据关系：**
+    * `Bookings.slotId` 关联 `AvailabilitySlots._id`
+    * `Bookings.userId` 关联 `Users._id`
+    * `AvailabilitySlots.bookingId` 关联 `Bookings._id` (当 status='booked')
+    * `AvailabilitySlots.userId` 关联 `Users._id` (当 status='booked')
+
+**5. 核心功能实现逻辑**
+
+* **教练设置可用时间：**
+    * 提供仅教练可访问的页面（通过登录状态判断）进行 `weeklyTemplate` 设置。
+    * 后端提供 API (`updateCoachConfig`) 接收模板数据。
+    * **实现方式：** 模板更新后，后端触发一个逻辑，**删除**未来 N 周（例如 8 周）内该教练所有 `status='available'` 的 `AvailabilitySlots` 记录，然后根据新模板**重新生成**这 N 周的 `AvailabilitySlots` 记录，插入数据库。
+    * **例外处理：** 教练以"特殊学员"身份登录前端，通过正常的预约流程来"占用"某个 `available` 的 slot（使其变为 `booked`），或通过特殊权限（后端 API 判断调用者为教练）取消某个非自己预约的 `booked` slot（使其变为 `available`）。
+* **学员查看可用时间：**
+    * 前端界面：提供月视图日历，可左右滑动切换月份。日期下方标记是否有空闲时段。
+    * 点击日期，向后端请求该天的 `AvailabilitySlots` 列表。
+    * 每周（日历行）右侧提供按钮，点击后向后端请求该周（例如周一到周日）所有 `status='available'` 的 `AvailabilitySlots` 列表。
+    * 后端 API (`getAvailableSlots`) 负责查询并返回数据。
+* **学员预约流程：**
+    * 前端：用户选择时间段，调用后端 `createBooking` API。
+    * 后端 (`createBooking` API):
+        1.  验证用户登录状态 (OpenID)。
+        2.  获取请求的 `slotId`。
+        3.  使用数据库**原子操作**（如 MongoDB 的 `findOneAndUpdate` 或 SQL 的 `UPDATE ... WHERE status='available'`）尝试更新 `AvailabilitySlots` 集合中对应 `slotId` 的记录：将 `status` 从 'available' 更新为 'booked'，并写入 `userId` 和新的 `bookingId`。
+        4.  如果更新成功（表示抢占成功）：
+            * 在 `Bookings` 集合中创建一条新记录，`status='confirmed'`。
+            * **触发“新预约”通知** (给教练和学员)。
+            * 返回成功响应给前端。
+        5.  如果更新失败（表示已被他人预约）：返回“已被预约”的错误信息给前端。
+* **取消预约逻辑：**
+    * 前端：用户点击取消，调用后端 `cancelBooking` API。
+    * 后端 (`cancelBooking` API):
+        1.  验证用户登录状态和权限（只能取消自己的预约，或教练取消任意预约）。
+        2.  获取 `bookingId`。
+        3.  更新 `Bookings` 记录，设置 `status='cancelled_by_user'` (或 `_by_coach`)。
+        4.  根据 `bookingId` 找到关联的 `slotId`。
+        5.  更新对应的 `AvailabilitySlots` 记录，设置 `status='available'`，清空 `bookingId` 和 `userId`。
+        6.  **触发“预约取消”通知** (给教练和学员)。
+        7.  返回成功响应。 (原子性要求不高，按顺序执行即可)。
+* **通知发送逻辑：**
+    * **触发点：**
+        * 新预约：`createBooking` 成功后。
+        * 取消预约：`cancelBooking` 成功后。
+        * 上课提醒：需要一个**后台定时任务/调度器** (例如使用 `node-schedule` 库)。该任务定期（如每分钟）检查 `Bookings` 表，找出 `startTime` 在未来 15 分钟内且 `status='confirmed'` 的预约，并触发提醒。
+    * **实现：**
+        * 在 `Users` 表中（或单独一个表）存储用户的微信模板消息订阅意愿 (需要前端调用 `wx.requestSubscribeMessage` 获取权限)。
+        * 后端在需要发送通知时，根据 `userId` 查找对应的 OpenID，并调用微信服务端 `auth.getAccessToken` 和 `subscribeMessage.send` 接口发送模板消息。需要配置好 `accessToken` 的获取和缓存。
+        * 同时通知教练和学员。
+
+**6. API 接口设计 (后端)**
+
+* **基础 URL:** `http://[你的本地Windows机器IP或域名]:[端口]/api/`
+* **主要 Endpoints:**
+    * `POST /api/login` (输入: `code`, 输出: `token` 或包含 OpenID 的用户信息) - 小程序调用 `wx.login` 获取 code 后传给后端换取 OpenID/Session。
+    * `GET /api/coach/config` (需要教练权限) -> 获取教练配置
+    * `PUT /api/coach/config` (需要教练权限, 输入: `configData`) -> 更新教练配置并触发时段再生
+    * `GET /api/slots?date=YYYY-MM-DD` -> 获取某天所有可用和已预约时段
+    * `GET /api/slots/week?startDate=YYYY-MM-DD` -> 获取某周所有可用时段
+    * `POST /api/bookings` (需要学员权限, 输入: `{ slotId: "xxx" }`) -> 创建预约
+    * `DELETE /api/bookings/:bookingId` (需要学员或教练权限) -> 取消预约
+    * `GET /api/bookings/mine/upcoming` (需要学员权限) -> 获取我的待上课预约
+    * `GET /api/coach/bookings?date=YYYY-MM-DD` (需要教练权限) -> 教练获取某天预约
+    * `POST /api/users/subscribe` (需要学员权限, 输入: 模板ID列表) -> 记录用户订阅意愿
+    * *需要根据实际后端框架调整路由和参数传递方式。*
+
+**7. 非功能性设计**
+
+* **权限控制：** 在后端每个需要权限的 API 接口处，检查请求中携带的用户身份标识（例如通过 JWT Token 解析出的 OpenID 和角色），验证其是否有权执行该操作。
+* **错误处理：** 定义统一的 API 错误响应格式。常见错误码：
+    * `400 Bad Request`: 请求参数错误
+    * `401 Unauthorized`: 未登录或 Token 无效
+    * `403 Forbidden`: 无权限操作
+    * `404 Not Found`: 资源不存在 (如预约记录)
+    * `409 Conflict`: 资源冲突 (如预约时间已被占用)
+    * `500 Internal Server Error`: 服务器内部错误
+* **日志：** 后端使用简单的日志库（如 `winston` 或 `pino` for Node.js）记录关键操作（API 调用、错误、通知发送）到本地文件。
+* **部署：** 手动将后端代码部署到本地 Windows 服务器，确保 Node.js 环境、数据库已安装并运行，配置好网络访问。小程序代码通过微信开发者工具上传。
+
+**8. 其他考虑**
+
+* **测试策略：** 以开发者自测和手动测试核心预约、取消流程为主。
+* **风险应对：**
+    * **通知送达：** 接受微信模板消息可能送达失败的风险，暂不考虑备用通知方式。
+    * **并发：** 通过数据库原子操作处理常见并发预约场景，不追求极端情况下的绝对一致性。
+    * **部署稳定性：** 本地 Windows 部署的稳定性、可用性、安全性风险由使用者承担。
