@@ -116,6 +116,50 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// GET /api/coach/config - Retrieves the coach's configuration
+app.get('/api/coach/config', async (req, res) => {
+    // TODO: Implement authentication/authorization - Ensure only the coach can access this.
+  
+    try {
+      const sql = "SELECT coachId, weeklyTemplate, sessionDurationMinutes FROM CoachConfig LIMIT 1";
+      db.get(sql, [], (err, row) => { // Use db.get for single row expected
+        if (err) {
+          console.error("Database error getting coach config:", err.message);
+          return res.status(500).json({ error: 'Database error fetching configuration.' });
+        }
+  
+        if (!row) {
+          // No config found yet
+          return res.status(404).json({ error: 'Coach configuration not found.' });
+          // Alternatively, could return default/empty config: res.status(200).json({});
+        }
+  
+        // Config found, parse the weeklyTemplate JSON string
+        let configData = { ...row }; // Copy row data
+        try {
+          // Only parse if weeklyTemplate is not null/empty
+          if (configData.weeklyTemplate) {
+              configData.weeklyTemplate = JSON.parse(configData.weeklyTemplate);
+          } else {
+              configData.weeklyTemplate = null; // Or {} if you prefer an empty object
+          }
+        } catch (parseError) {
+          console.error("Error parsing weeklyTemplate JSON:", parseError.message);
+          // Send back the raw data but maybe log the error or return a specific parse error
+          // For simplicity here, we might return an error or the unparsed data
+          return res.status(500).json({ error: 'Error processing configuration data.' });
+          // Or potentially return row data with unparsed template:
+          // return res.status(200).json(row);
+        }
+  
+        // Successfully retrieved and parsed config
+        res.status(200).json(configData);
+      });
+    } catch (error) {
+      console.error("Error in GET /api/coach/config:", error.message);
+      res.status(500).json({ error: 'Failed to retrieve coach configuration.' });
+    }
+  });
 
 // 5. Define a Basic Test Route
 app.get('/', (req, res) => {
