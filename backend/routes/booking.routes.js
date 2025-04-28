@@ -9,6 +9,8 @@ const bookingController = require('../controllers/booking.controller.js');
 router.post('/', bookingController.createBooking);
 // DELETE /api/bookings/:bookingId
 router.delete('/:bookingId', bookingController.cancelBooking);
+// GET /api/bookings/mine/upcoming
+router.get('/mine/upcoming', bookingController.getMyUpcomingBookings); // <-- ADD THIS LINE
 
 // --- Add other booking-related routes here later ---
 // e.g., router.get('/mine/upcoming', bookingController.getMyUpcomingBookings);

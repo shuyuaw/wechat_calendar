@@ -1,3 +1,8 @@
+const {
+    // ... other functions like parseISO, isBefore, isAfter ...
+    formatISO, // <-- Make sure this is included
+  } = require('date-fns');
+
 // backend/controllers/booking.controller.js
 const db = require('../database.js');
 
@@ -227,8 +232,49 @@ const cancelBooking = async (req, res) => {
     }
   };
 
+// Controller function for a student to get their own upcoming bookings
+const getMyUpcomingBookings = async (req, res) => {
+    // TODO: Implement authentication - Get requesterUserId from verified session/token
+    // For testing now, let's assume the ID of the user we manually added
+    const requesterUserId = 'test_user_openid_123';
+  
+    if (!requesterUserId) {
+      // This check will be more robust with real authentication
+      return res.status(401).json({ error: 'User identification missing.' });
+    }
+  
+    try {
+      const nowISO = formatISO(new Date()); // Get current time in ISO format for comparison
+  
+      // --- Database Query ---
+      const sql = `
+        SELECT bookingId, slotId, startTime, endTime, status
+        FROM Bookings
+        WHERE userId = ?
+          AND status = 'confirmed'
+          AND startTime >= ?  -- Only bookings starting now or in the future
+        ORDER BY startTime ASC
+      `;
+  
+      console.log(`Querying upcoming confirmed bookings for user ${requesterUserId} from ${nowISO}...`);
+  
+      db.all(sql, [requesterUserId, nowISO], (err, rows) => {
+        if (err) {
+          console.error(`Database error fetching upcoming bookings for user ${requesterUserId}:`, err.message);
+          return res.status(500).json({ error: 'Database error fetching bookings.' });
+        }
+        res.status(200).json(rows || []); // Return found bookings or empty array
+      });
+      // --- End Database Query ---
+  
+    } catch (error) {
+      console.error(`Error in getMyUpcomingBookings controller for user ${requesterUserId}:`, error.message);
+      res.status(500).json({ error: 'Failed to retrieve upcoming bookings.' });
+    }
+  };
 
 module.exports = {
   createBooking,
   cancelBooking,
+  getMyUpcomingBookings,
 };

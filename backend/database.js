@@ -73,7 +73,7 @@ function initializeDatabase() {
         bookingId INTEGER PRIMARY KEY AUTOINCREMENT,
         userId TEXT NOT NULL,
         coachId TEXT NOT NULL, -- Matches the coachId in CoachConfig
-        slotId INTEGER UNIQUE NOT NULL, -- Link to the specific slot being booked
+        slotId INTEGER NOT NULL, -- Link to the specific slot being booked
         startTime TEXT NOT NULL,        -- ISO 8601 format string
         endTime TEXT NOT NULL,          -- ISO 8601 format string
         status TEXT CHECK(status IN ('confirmed', 'cancelled_by_user', 'cancelled_by_coach', 'completed')) NOT NULL, -- Added 'completed' status
