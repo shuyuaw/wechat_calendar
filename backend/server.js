@@ -9,8 +9,8 @@ const db = require('./database.js'); // Import the database (ensures connection 
 // --- Require Route Modules ---
 const authRoutes = require('./routes/auth.routes');
 const coachRoutes = require('./routes/coach.routes');
-const slotRoutes = require('./routes/slot.routes'); // <-- ADD THIS LINE
-// Add other route requires here later (e.g., bookingRoutes)
+const slotRoutes = require('./routes/slot.routes'); 
+const bookingRoutes = require('./routes/booking.routes'); 
 
 // 2. Configure Environment Variables
 dotenv.config();
@@ -29,12 +29,10 @@ app.use((req, res, next) => {
 });
 
 // --- Mount API Routers ---
-// Any routes defined in auth.routes.js will be prefixed with /api
 app.use('/api', authRoutes);
-// Any routes defined in coach.routes.js will be prefixed with /api/coach
 app.use('/api/coach', coachRoutes);
-// Any routes defined in slot.routes.js will be prefixed with /api/slots
 app.use('/api/slots', slotRoutes);
+app.use('/api/bookings', bookingRoutes);
 // Add other app.use() for other route modules here
 
 // --- Basic Test Route (Optional - can be removed later) ---
