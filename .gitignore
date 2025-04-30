@@ -1,5 +1,6 @@
 # backend/ Node modules
 backend/node_modules/
+node_modules/
 
 # Environment variables file
 backend/.env
