@@ -10,4 +10,7 @@ router.get('/config', coachController.getCoachConfig);
 // PUT /api/coach/config
 router.put('/config', coachController.updateCoachConfig);
 
+// GET /api/coach/bookings?date=YYYY-MM-DD
+router.get('/bookings', coachController.getCoachBookingsForDate); // <-- ADD THIS LINE
+
 module.exports = router;

@@ -3,8 +3,6 @@ const db = require('../database.js');
 const {
   addDays,
   addMinutes,
-  formatISO,
-  startOfDay,
   getDay,
   setHours,
   setMinutes,
@@ -12,7 +10,12 @@ const {
   setMilliseconds,
   parseISO, // <-- Add parseISO
   isBefore, // <-- Add isBefore
-  isAfter   // <-- Add isAfter
+  isAfter,   // <-- Add isAfter
+  parse: parseDate,
+  isValid: isValidDate,
+  startOfDay,
+  endOfDay,
+  formatISO,
 } = require('date-fns');
 
 // Controller function to get coach config
@@ -285,13 +288,72 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
   }
 }
 
-// --- Export all controller functions ---
-module.exports = {
-  getCoachConfig,
-  updateCoachConfig,
+// Controller function for the coach to get confirmed bookings for a specific date
+const getCoachBookingsForDate = async (req, res) => {
+  // TODO: Implement authentication - Verify requester is the coach
+  // For now, assume the coach making the request corresponds to COACH_001
+  const coachId = 'COACH_001';
+
+  const requestedDate = req.query.date; // Get date from query param
+
+  // --- Validate Input Date ---
+  if (!requestedDate) {
+      return res.status(400).json({ error: 'Missing required query parameter: date (YYYY-MM-DD).' });
+  }
+  const parsedDate = parseDate(requestedDate, 'yyyy-MM-dd', new Date());
+  if (!isValidDate(parsedDate)) {
+      return res.status(400).json({ error: 'Invalid date format. Please use YYYY-MM-DD.' });
+  }
+  // --- End Validation ---
+
+  // --- Calculate Date Range for Query ---
+  const dayStart = startOfDay(parsedDate);
+  const dayEnd = endOfDay(parsedDate);
+  const startTimeQuery = formatISO(dayStart);
+  const endTimeQuery = formatISO(dayEnd);
+  // --- End Date Range Calculation ---
+
+  try {
+      // --- Database Query ---
+      // Select booking details and join with Users table to get student nickname
+      const sql = `
+          SELECT
+              b.bookingId,
+              b.slotId,
+              b.startTime,
+              b.endTime,
+              b.status,
+              b.userId,
+              u.nickName AS userNickName
+          FROM Bookings b
+          LEFT JOIN Users u ON b.userId = u.userId
+          WHERE b.coachId = ?
+            AND b.startTime >= ?
+            AND b.startTime <= ?
+            AND b.status = 'confirmed' -- Only show confirmed bookings
+          ORDER BY b.startTime ASC
+      `;
+
+      console.log(`Querying confirmed bookings for coach ${coachId} on ${requestedDate}`);
+
+      db.all(sql, [coachId, startTimeQuery, endTimeQuery], (err, rows) => {
+          if (err) {
+              console.error(`Database error fetching coach bookings for date ${requestedDate}:`, err.message);
+              return res.status(500).json({ error: 'Database error fetching bookings.' });
+          }
+          res.status(200).json(rows || []); // Return found bookings or empty array
+      });
+      // --- End Database Query ---
+
+  } catch (error) {
+      console.error(`Error in getCoachBookingsForDate controller for date ${requestedDate}:`, error.message);
+      res.status(500).json({ error: 'Failed to retrieve coach bookings.' });
+  }
 };
 
 module.exports = {
   getCoachConfig,
   updateCoachConfig,
+  getCoachBookingsForDate, // <-- Add this line
+  // Make sure regenerateAvailabilitySlots is NOT exported unless needed externally
 };
