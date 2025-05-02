@@ -1,10 +1,67 @@
-/**index.wxss**/
-page {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+/* frontend/pages/index/index.wxss */
+.container {
+  padding: 20rpx;
+  font-family: sans-serif;
 }
-.scrollarea {
-  flex: 1;
-  overflow-y: hidden;
+
+.page-title {
+  font-size: 40rpx;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 30rpx;
+}
+
+.loading-message,
+.error-message,
+.no-slots-message {
+  color: #888;
+  text-align: center;
+  padding: 40rpx;
+}
+
+.error-message button {
+    margin-top: 20rpx;
+}
+
+.slot-list {
+  margin-top: 20rpx;
+}
+
+.slot-item {
+  display: flex; /* Use flexbox for layout */
+  justify-content: space-between; /* Space out elements */
+  align-items: center; /* Center items vertically */
+  padding: 25rpx 20rpx;
+  border: 1px solid #eee;
+  margin-bottom: 15rpx;
+  border-radius: 8rpx;
+  background-color: #f9f9f9;
+  cursor: pointer; /* Indicate it's clickable */
+}
+
+.slot-item:active {
+    background-color: #e0e0e0; /* Simple feedback on tap */
+}
+
+.slot-time {
+  font-size: 28rpx;
+  flex-grow: 1; /* Allow time to take available space */
+  margin-right: 20rpx;
+}
+
+.slot-status {
+  font-size: 24rpx;
+  color: green; /* Style available status */
+  margin-right: 20rpx;
+}
+
+.book-indicator {
+    font-size: 26rpx;
+    color: #007aff; /* Blue color for call to action */
+    font-weight: bold;
+}
+
+/* Add styles for 'booked' status if you fetch all slots, though /week only fetches available */
+.slot-status.booked {
+  color: #888;
 }

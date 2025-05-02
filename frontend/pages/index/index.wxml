@@ -1,7 +1,36 @@
-<!--index.wxml-->
-<navigation-bar title="Weixin" back="{{false}}" color="black" background="#FFF"></navigation-bar>
-<scroll-view class="scrollarea" scroll-y type="list">
-  <view class="container">
-    Weixin
+<view class="container">
+  <view class="page-title">可预约时段 (本周)</view> <view wx:if="{{isLoading}}" class="loading-message">
+    <text>正在加载...</text>
   </view>
-</scroll-view>
+
+  <view wx:if="{{!isLoading && error}}" class="error-message">
+    <text>加载失败: {{error}}</text>
+    <button size="mini" bindtap="fetchAvailableSlots">重试</button>
+  </view>
+
+  <view wx:if="{{!isLoading && !error && availableSlots.length === 0}}" class="no-slots-message">
+    <text>本周当前没有可预约时段。</text>
+  </view>
+
+  <block wx:if="{{!isLoading && !error && availableSlots.length > 0}}">
+    <view class="slot-list">
+      <view
+        wx:for="{{availableSlots}}"
+        wx:key="slotId"
+        class="slot-item"
+        bindtap="handleBookSlot"
+        data-slot-id="{{item.slotId}}"
+        data-start-time="{{item.startTime}}"
+        data-end-time="{{item.endTime}}"
+      >
+        <text class="slot-time">
+          时间: {{item.startTime}} - {{item.endTime}}
+        </text>
+        <text class="slot-status {{item.status}}">
+          状态: {{item.status}} </text>
+        <text class="book-indicator">点击预约</text>
+      </view>
+    </view>
+  </block>
+
+</view>
