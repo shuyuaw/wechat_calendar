@@ -1,9 +1,9 @@
 // backend/server.js
 
 // 1. Require Modules
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const db = require('./database.js'); // Import the database (ensures connection + init)
 
 // --- Require Route Modules ---
@@ -11,9 +11,6 @@ const authRoutes = require('./routes/auth.routes');
 const coachRoutes = require('./routes/coach.routes');
 const slotRoutes = require('./routes/slot.routes'); 
 const bookingRoutes = require('./routes/booking.routes'); 
-
-// 2. Configure Environment Variables
-dotenv.config();
 
 // 3. Initialize Express App
 const app = express();
