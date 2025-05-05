@@ -108,14 +108,80 @@ Page({
     });
   },
 
-  /**
-   * Placeholder for cancellation logic
+/**
+   * Handles cancellation button tap
    */
-  handleCancelBooking: function(event) {
-    const bookingId = event.currentTarget.dataset.bookingId;
-    console.log('User wants to cancel booking ID:', bookingId);
-    // TODO: Implement cancellation (show modal, call DELETE API)
-     wx.showToast({ title: `取消 Booking ${bookingId} (待实现)`, icon: 'none' });
+handleCancelBooking: function(event) {
+    const { bookingId } = event.currentTarget.dataset; // Get bookingId from data-* attribute
+
+    if (bookingId === undefined) {
+      console.error("Cancel button tapped without bookingId");
+      return;
+    }
+
+    const bookingIdNum = parseInt(bookingId, 10);
+    if (isNaN(bookingIdNum)) {
+        console.error("Invalid bookingId passed to cancel handler:", bookingId);
+        return;
+    }
+
+    // Confirm with the user first
+    wx.showModal({
+      title: '取消预约',
+      content: '您确定要取消这个预约吗？', // "Are you sure you want to cancel this booking?"
+      success: (res) => {
+        if (res.confirm) {
+          console.log('User confirmed cancellation for booking ID:', bookingIdNum);
+          // Proceed with calling the cancellation API
+          this.callCancelBookingApi(bookingIdNum);
+        } else if (res.cancel) {
+          console.log('User cancelled the cancellation action');
+        }
+      }
+    })
+  },
+
+  /**
+   * Helper function to call the backend DELETE booking API
+   */
+  callCancelBookingApi: function(bookingId) {
+    wx.showLoading({ title: '正在取消...' });
+    this.setData({ isLoading: true }); // Optional: use page loading state
+
+    // Construct the URL with the booking ID
+    // Replace with your actual backend URL if different
+    const apiUrl = `http://localhost:3001/api/bookings/${bookingId}`;
+
+    wx.request({
+      url: apiUrl,
+      method: 'DELETE',
+      // TODO: Add Authorization header with user's token/session info here
+      // header: { 'Authorization': 'Bearer ' + token }
+      success: (res) => {
+        console.log('Cancel API response:', res);
+        if (res.statusCode === 200) { // Backend returns 200 OK on successful delete
+          wx.showToast({ title: '取消成功', icon: 'success' });
+          // Refresh the list of bookings after cancellation
+          this.fetchMyBookings();
+        } else {
+          // Handle errors like 403 Forbidden, 404 Not Found, 500 Server Error
+          const errorMsg = res.data && res.data.error ? res.data.error : '请稍后重试';
+          console.error('Cancellation failed:', res);
+          wx.showToast({ title: `取消失败: ${errorMsg}`, icon: 'none', duration: 2500 });
+          this.setData({ isLoading: false }); // Reset loading state on error
+        }
+      },
+      fail: (err) => {
+        console.error('wx.request failed (cancel):', err);
+        wx.showToast({ title: '网络错误，取消失败', icon: 'none' });
+        this.setData({ isLoading: false });
+      },
+      complete: () => {
+        wx.hideLoading();
+        // Ensure loading state is reset if it was set
+        // this.setData({ isLoading: false });
+      }
+    });
   },
 
   /**

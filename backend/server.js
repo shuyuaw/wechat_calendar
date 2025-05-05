@@ -1,9 +1,18 @@
 // backend/server.js
+// backend/server.js
+require('dotenv').config(); // <--- ADD THIS LINE! It MUST be called.
+
+// Optional but recommended debug logs:
+console.log('Checking env vars after dotenv config:');
+console.log('  JWT_SECRET:', process.env.JWT_SECRET ? 'Loaded' : 'MISSING!');
+console.log('  COACH_OPENID:', process.env.COACH_OPENID ? 'Loaded' : 'MISSING!');
+console.log('  WECHAT_APP_ID:', process.env.WECHAT_APP_ID ? 'Loaded' : 'MISSING!');
+console.log('  WECHAT_APP_SECRET:', process.env.WECHAT_APP_SECRET ? 'Loaded' : 'MISSING!');
+console.log('------------------------------------');
 
 // 1. Require Modules
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const db = require('./database.js'); // Import the database (ensures connection + init)
 
 // --- Require Route Modules ---
@@ -11,9 +20,6 @@ const authRoutes = require('./routes/auth.routes');
 const coachRoutes = require('./routes/coach.routes');
 const slotRoutes = require('./routes/slot.routes'); 
 const bookingRoutes = require('./routes/booking.routes'); 
-
-// 2. Configure Environment Variables
-dotenv.config();
 
 // 3. Initialize Express App
 const app = express();

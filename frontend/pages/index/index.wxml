@@ -24,9 +24,12 @@
         data-slot-id="{{item.slotId}}"
         data-start-time="{{item.startTime}}"
       >
-        <text class="slot-time">时间: {{item.displayTime}}</text>
-        <text class="slot-status {{item.status}}">状态: {{item.status}}</text>
-        <text class="book-indicator">点击预约</text>
+<view class="slot-datetime-details"> <text class="slot-date">{{item.displayDate}}</text> <text class="slot-time">{{item.displayTime}}</text>
+       </view>
+       <text class="slot-status {{item.status}}">
+           状态: {{item.status}}
+       </text>
+       <text class="book-indicator">点击预约</text>
       </view>
     </view>
   </block>

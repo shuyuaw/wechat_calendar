@@ -50,41 +50,46 @@ Page({
         // Replace with your actual backend URL if different
         const apiUrl = `http://localhost:3001/api/slots/week?startDate=${formattedDate}`;
 
+        // Corrected console log message
         console.log(`Workspaceing available slots for week starting around ${formattedDate}...`);
 
         wx.request({
             url: apiUrl,
             method: 'GET',
-
-            // Inside fetchAvailableSlots function in index.js
-            // ... inside wx.request ...
             success: (res) => {
                 console.log('Received slots:', res.data);
                 if (res.statusCode === 200 && Array.isArray(res.data)) {
 
-                    // --- Add Formatting Logic ---
+                    // --- CORRECTED Formatting Logic ---
                     const formattedSlots = res.data.map(slot => {
                         try {
                             // Parse ISO strings into Date objects
                             const startDate = new Date(slot.startTime);
                             const endDate = new Date(slot.endTime);
 
-                            // Format to HH:MM (ensure leading zeros)
+                            // Format Date part (e.g.,<y_bin_46>-MM-DD)
+                            const year = startDate.getFullYear();
+                            const month = (startDate.getMonth() + 1).toString().padStart(2, '0');
+                            const day = startDate.getDate().toString().padStart(2, '0');
+                            const displayDate = `${year}-${month}-${day}`; // Calculate displayDate
+
+                            // Format Time part (HH:MM - HH:MM)
                             const startHours = startDate.getHours().toString().padStart(2, '0');
                             const startMinutes = startDate.getMinutes().toString().padStart(2, '0');
                             const endHours = endDate.getHours().toString().padStart(2, '0');
                             const endMinutes = endDate.getMinutes().toString().padStart(2, '0');
+                            const displayTime = `${startHours}:${startMinutes} - ${endHours}:${endMinutes}`; // Calculate displayTime
 
-                            // Create a display string
-                            const displayTime = `${startHours}:${startMinutes} - ${endHours}:${endMinutes}`;
-
-                            // Return the original slot data plus the new displayTime
-                            return { ...slot, displayTime: displayTime };
-
+                            // Return BOTH displayDate and displayTime
+                            return {
+                                ...slot,
+                                displayDate: displayDate, // Return displayDate
+                                displayTime: displayTime  // Return displayTime
+                              };
                         } catch (e) {
-                            console.error("Error formatting time for slot:", slot, e);
-                            // Return slot with raw times if formatting fails
-                            return { ...slot, displayTime: 'Invalid Time' };
+                            console.error("Error formatting time/date for slot:", slot, e);
+                            // Also return both, even if invalid
+                            return { ...slot, displayDate: 'Invalid Date', displayTime: 'Invalid Time' };
                         }
                     });
                     // --- End Formatting Logic ---
@@ -95,13 +100,12 @@ Page({
                         isLoading: false,
                     });
                 } else {
-                    // ... keep existing error handling ...
+                    // Handle cases where backend might return error or non-array
                     console.error('Failed to fetch slots or received invalid data:', res);
                     this.setData({ isLoading: false, error: '无法加载可用时段', availableSlots: [] });
                     wx.showToast({ title: '加载失败', icon: 'error' });
                 }
             },
-            // ... keep fail and complete callbacks ...
             fail: (err) => {
                 console.error('wx.request failed:', err);
                 this.setData({
@@ -144,7 +148,7 @@ Page({
 
         // 2. Confirm with the user
         //    (Optional: Format startTime for better display in the modal)
-        const formattedDisplayTime = startTime ? new Date(startTime).toLocaleString() : '这个时段'; // Basic formatting
+        const formattedDisplayTime = startTime ? new Date(startTime).toLocaleString() : '这个时段'; // Basic formatting for modal
         wx.showModal({
             title: '确认预约',
             content: `您确定要预约 ${formattedDisplayTime} 吗？`, // "Are you sure you want to book the slot [startTime]?"
@@ -174,7 +178,7 @@ Page({
             url: apiUrl,
             method: 'POST',
             data: {
-                slotId: Number(slotId), // Ensure slotId is sent as a number if needed by backend validation
+                slotId: Number(slotId), // Ensure slotId is sent as a number
                 userId: userId
             },
             success: (res) => {
@@ -203,8 +207,10 @@ Page({
             complete: () => {
                 // isLoading might already be false from success/error, but ensure hideLoading is called
                 wx.hideLoading();
-                // If you didn't reset isLoading in success/fail, do it here:
-                // this.setData({ isLoading: false });
+                // Ensure isLoading is reset if not already done in success/fail
+                if(this.data.isLoading) {
+                    this.setData({ isLoading: false });
+                }
             }
         });
     }

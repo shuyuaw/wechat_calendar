@@ -2,10 +2,15 @@
 const express = require('express');
 const router = express.Router();
 const coachController = require('../controllers/coach.controller.js');
+const { verifyToken } = require('../middleware/auth.middleware.js'); // <--- Import the middleware
 
-// Define coach config routes
-// GET /api/coach/config
-router.get('/config', coachController.getCoachConfig);
+// --- Protected Coach Routes ---
+// The verifyToken middleware will run FIRST for all these routes.
+// It ensures a valid token exists and populates req.user.
+// Additional authorization (checking if req.user IS the coach) must happen inside the controller.
+
+// GET /api/coach/config (Get coach configuration - requires coach permission)
+router.get('/config', verifyToken, coachController.getCoachConfig);
 
 // PUT /api/coach/config
 router.put('/config', coachController.updateCoachConfig);
