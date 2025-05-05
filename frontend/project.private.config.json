@@ -5,5 +5,18 @@
     "compileHotReLoad": true,
     "urlCheck": false,
     "skylineRenderEnable": true
+  },
+  "condition": {
+    "miniprogram": {
+      "list": [
+        {
+          "name": "测试教练配置页",
+          "pathName": "pages/coachConfig/coachConfig",
+          "query": "",
+          "launchMode": "default",
+          "scene": null
+        }
+      ]
+    }
   }
 }

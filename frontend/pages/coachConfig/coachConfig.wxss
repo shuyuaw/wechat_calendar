@@ -1,0 +1,32 @@
+/* frontend/pages/coachConfig/coachConfig.wxss */
+.container {
+  padding: 20rpx;
+}
+
+.form-group {
+  margin-bottom: 30rpx;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 10rpx;
+  font-weight: bold;
+}
+
+.form-group input,
+.form-group .template-input {
+  border: 1px solid #ccc;
+  padding: 10rpx;
+  width: 100%;
+  box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
+
+.template-hint {
+  font-size: 24rpx;
+  color: #888;
+  margin-top: 10rpx;
+}
+
+button {
+  margin-top: 20rpx;
+}

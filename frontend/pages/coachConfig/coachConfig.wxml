@@ -1,0 +1,17 @@
+<view class="container">
+  <view class="form-group">
+    <label>单节辅导时长 (分钟):</label>
+    <input type="number" model:value="{{sessionDurationMinutes}}" placeholder="例如: 60" />
+  </view>
+
+  <view class="form-group">
+    <label>每周可预约时间模板:</label>
+    <textarea class="template-input" model:value="{{weeklyTemplateStr}}" placeholder="在此处输入或显示模板 (将来替换为UI控件)" auto-height/>
+    <view class="template-hint">示例: {"mon": ["14:00", "15:00"], "wed": ["09:00", "10:00", "11:00"]}</view>
+  </view>
+
+  <button type="primary" bindtap="onSave">保存设置</button>
+
+  <view wx:if="{{loading}}">加载中...</view>
+  <view wx:if="{{error}}">错误: {{error}}</view>
+</view>

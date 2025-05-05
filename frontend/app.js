@@ -1,85 +1,97 @@
 // frontend/app.js
 App({
-    // This function runs once when the Mini Program starts
-    onLaunch: function () {
-      console.log('App Launching...'); // Log when app starts
-  
-      // --- Perform Login ---
-      wx.login({
-        success: res => { // Use arrow function for correct 'this' scope if needed later
+  /**
+   * Global data for the application
+   */
+  globalData: {
+    userInfo: null, // Placeholder for potential user profile info
+    openid: null,   // Store the user's unique OpenID
+    // No need to store token in globalData, using wx.setStorageSync instead
+    // BASE_URL: 'http://localhost:3001/api' // Define base URL if needed elsewhere
+  },
+
+  /**
+   * Lifecycle callback - Called when the Mini Program initializes.
+   */
+  onLaunch() {
+    console.log('App Launching...');
+    this.loginUser();
+  },
+
+  /**
+   * Custom method to handle user login
+   */
+  loginUser() {
+    // 1. Get the login code from WeChat
+    wx.login({
+      success: res => {
+        if (res.code) {
           console.log('wx.login success, code:', res.code);
-          // Send res.code to backend to exchange for openId
-          if (res.code) {
-            // Initiate network request to our backend
-            wx.request({
-              // IMPORTANT: Use your actual backend server address.
-              // For local testing, use localhost or your local IP.
-              // Make sure your backend server is running!
-              url: 'http://localhost:3001/api/login', // Replace with your backend URL
-              method: 'POST',
-              data: {
-                code: res.code // Send the code obtained from wx.login
-              },
-              success: loginRes => { // Use arrow function
+          // 2. Send the code to the backend server to exchange for openid and token
+          wx.request({
+            // *** IMPORTANT: Replace with your actual backend URL ***
+            // If your server is running locally for testing:
+            url: 'http://localhost:3001/api/login',
+            // If deployed or using a different URL, update this:
+            // url: 'YOUR_DEPLOYED_BACKEND_URL/api/login',
+            method: 'POST',
+            data: {
+              code: res.code
+            },
+            success: (loginRes) => {
+              // 3. Handle the backend response
+              // Check status code and expected data structure from your backend API
+              if (loginRes.statusCode === 200 && loginRes.data && loginRes.data.token && loginRes.data.openid) {
                 console.log('Backend /api/login success:', loginRes.data);
-                if (loginRes.statusCode === 200 && loginRes.data.openid) {
-                  // Login successful, store the openid globally
-                  this.globalData.openid = loginRes.data.openid;
-                  console.log('Stored openid in globalData:', this.globalData.openid);
-  
-                // **** ADD THIS CHECK & CALLBACK ****
-                // Check if there is a callback function waiting for the openid
-                if (this.openidReadyCallback) {
-                  console.log('Executing openidReadyCallback');
-                  this.openidReadyCallback(loginRes.data.openid);
+
+                // Store the OpenID in globalData
+                this.globalData.openid = loginRes.data.openid;
+                console.log('Stored openid in globalData:', this.globalData.openid);
+
+                // --- *** THIS IS THE FIX *** ---
+                // Store the token persistently using WeChat's synchronous storage API
+                try {
+                  wx.setStorageSync('token', loginRes.data.token);
+                  console.log('Token stored successfully in wx.setStorageSync.');
+                } catch (e) {
+                  console.error('Failed to store token in wx.setStorageSync:', e);
+                  // Optional: Show an error to the user if storing fails critically
+                  // wx.showToast({ title: '登录状态保存失败', icon: 'error' });
                 }
-                } else {
-                  // Backend returned an error or unexpected response
-                  console.error('Backend login failed:', loginRes);
-                  // Optionally show a user-facing error
-                  wx.showToast({
-                    title: '登录失败',
-                    icon: 'error',
-                    duration: 2000
-                  });
-                }
-              },
-              fail: loginErr => {
-                console.error('wx.request to /api/login failed:', loginErr);
-                // Handle network errors or other request failures
-                wx.showToast({
-                  title: '网络错误，登录失败',
-                  icon: 'none',
-                  duration: 2000
-                });
+                // --- *** END OF FIX *** ---
+
+                // Optional: Store other user info if your login endpoint returns it
+                // this.globalData.userInfo = loginRes.data.userInfo || null;
+
+                // TODO: Maybe trigger a callback or event if pages need to know login is complete
+                // For example, using wx.event or a simple flag/callback system
+
+
+              } else {
+                // Handle cases where backend returned an error or unexpected data
+                console.error('Backend /api/login error response:', loginRes);
+                wx.showToast({ title: '登录失败[Server]', icon: 'none' }); // Use 'none' for custom msg
               }
-            });
-          } else {
-            console.error('wx.login failed! Error:', res.errMsg);
-            wx.showToast({
-              title: '微信登录失败',
-              icon: 'error',
-              duration: 2000
-            });
-          }
-        },
-        fail: err => {
-            console.error('wx.login API call failed! Error:', err);
-            wx.showToast({
-              title: '无法调用微信登录',
-              icon: 'error',
-              duration: 2000
-            });
+            },
+            fail: (err) => {
+              // Handle network errors or failure to reach the backend
+              console.error('wx.request to /api/login failed:', err);
+              wx.showToast({ title: '网络错误，请稍后重试', icon: 'none' });
+            }
+          });
+        } else {
+          // Handle cases where wx.login itself fails to get a code
+          console.error('wx.login failed to get code:', res);
+          wx.showToast({ title: '微信登录接口调用失败', icon: 'none' });
         }
-      });
-      // --- End Login ---
-  
-      // Other onLaunch logic can go here (e.g., checking update manager)
-    },
-  
-    // Define global data object
-    globalData: {
-      userInfo: null,
-      openid: null // We will store the openid here after successful login
-    }
-  })
+      },
+      fail: err => {
+        // Handle errors in the wx.login call itself
+        console.error('wx.login API call failed:', err);
+        wx.showToast({ title: '微信登录失败', icon: 'none' });
+      }
+    });
+  }
+
+  // You can add other global methods or properties here if needed
+})
