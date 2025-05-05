@@ -1,0 +1,54 @@
+/* frontend/pages/myBookings/myBookings.wxss */
+.container {
+  padding: 20rpx;
+  font-family: sans-serif;
+}
+
+.page-title {
+  font-size: 40rpx;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 30rpx;
+}
+
+.loading-message,
+.error-message,
+.no-bookings-message {
+  color: #888;
+  text-align: center;
+  padding: 40rpx;
+}
+
+.error-message button {
+    margin-top: 20rpx;
+}
+
+.booking-list {
+  margin-top: 20rpx;
+}
+
+.booking-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25rpx 20rpx;
+  border: 1px solid #eee;
+  margin-bottom: 15rpx;
+  border-radius: 8rpx;
+  background-color: #f9f9f9;
+}
+
+.booking-details {
+  flex-grow: 1;
+  margin-right: 20rpx;
+}
+
+.booking-time {
+  font-size: 28rpx;
+  display: block; /* Allow multiple lines if needed */
+}
+
+.cancel-button {
+  /* Use default button styles, maybe adjust margin */
+  margin-left: 10rpx;
+}

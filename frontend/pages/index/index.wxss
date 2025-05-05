@@ -28,9 +28,9 @@
 }
 
 .slot-item {
-  display: flex; /* Use flexbox for layout */
-  justify-content: space-between; /* Space out elements */
-  align-items: center; /* Center items vertically */
+  display: flex; /* <-- Restore this */
+  justify-content: space-between; /* <-- Restore this */
+  align-items: center; /* <-- Restore this */
   padding: 25rpx 20rpx;
   border: 1px solid #eee;
   margin-bottom: 15rpx;

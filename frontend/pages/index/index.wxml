@@ -1,5 +1,7 @@
 <view class="container">
-  <view class="page-title">可预约时段 (本周)</view> <view wx:if="{{isLoading}}" class="loading-message">
+  <view class="page-title">可预约时段 (本周)</view>
+
+  <view wx:if="{{isLoading}}" class="loading-message">
     <text>正在加载...</text>
   </view>
 
@@ -21,13 +23,9 @@
         bindtap="handleBookSlot"
         data-slot-id="{{item.slotId}}"
         data-start-time="{{item.startTime}}"
-        data-end-time="{{item.endTime}}"
       >
-        <text class="slot-time">
-          时间: {{item.startTime}} - {{item.endTime}}
-        </text>
-        <text class="slot-status {{item.status}}">
-          状态: {{item.status}} </text>
+        <text class="slot-time">时间: {{item.displayTime}}</text>
+        <text class="slot-status {{item.status}}">状态: {{item.status}}</text>
         <text class="book-indicator">点击预约</text>
       </view>
     </view>

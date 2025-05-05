@@ -27,9 +27,12 @@ App({
                   this.globalData.openid = loginRes.data.openid;
                   console.log('Stored openid in globalData:', this.globalData.openid);
   
-                  // TODO: Add callback logic here if other pages need to know login is complete
-                  // Example: if (this.userInfoReadyCallback) { this.userInfoReadyCallback(loginRes) }
-  
+                // **** ADD THIS CHECK & CALLBACK ****
+                // Check if there is a callback function waiting for the openid
+                if (this.openidReadyCallback) {
+                  console.log('Executing openidReadyCallback');
+                  this.openidReadyCallback(loginRes.data.openid);
+                }
                 } else {
                   // Backend returned an error or unexpected response
                   console.error('Backend login failed:', loginRes);
