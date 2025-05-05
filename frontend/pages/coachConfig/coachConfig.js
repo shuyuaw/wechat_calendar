@@ -12,7 +12,12 @@ Page({
     weeklyTemplateStr: '', // For temporary display in textarea
     loading: false,
     error: null,
-    isCoach: false // Flag to control access
+    isCoach: false, // Flag to control access
+    coachConfig: { // Initialize with expected structure
+      coachId: '',
+      weeklyTemplate: {},
+      sessionDurationMinutes: 0
+    }
   },
 
   /**
@@ -36,39 +41,35 @@ Page({
 
   // Function to load coach configuration from backend
   loadCoachConfig() {
-    if (!this.data.isCoach) return; // Don't load if not authorized
+    console.log('Attempting to fetch coach config via API...');
+    this.setData({ isLoading: true });
 
-    this.setData({ loading: true, error: null });
-
-    console.log("Attempting to fetch coach config via API...");
-    request({ url: '/api/coach/config', method: 'GET' })
-      .then(res => {
-        if (res.success && res.data) {
+    request({
+      url: '/api/coach/config',
+      method: 'GET',
+    })
+    .then(res => {
+      // Check if res itself is a valid object and has expected keys (e.g., coachId)
+      if (res && res.coachId !== undefined) { // Check for a key property
+          console.log('Successfully fetched coach config:', res);
           this.setData({
-            sessionDurationMinutes: res.data.sessionDurationMinutes,
-            weeklyTemplate: res.data.weeklyTemplate || {},
-            weeklyTemplateStr: JSON.stringify(res.data.weeklyTemplate || {}, null, 2), // Pretty print JSON
-            loading: false
+              coachConfig: res, // Use res directly as it IS the data
+              isLoading: false
           });
-        } else {
-          throw new Error(res.message || '未能加载配置');
-        }
-      })
-      .catch(err => {
-        this.setData({ error: err.message || '加载失败', loading: false });
-        wx.showToast({ title: '加载失败', icon: 'error' });
-      });
-
-    // **Temporary Placeholder Data** (Remove when API call is implemented)
-    // setTimeout(() => {
-    //   this.setData({
-    //     sessionDurationMinutes: 60,
-    //     weeklyTemplate: {"mon": ["14:00", "15:00"], "wed": ["09:00"]},
-    //     weeklyTemplateStr: JSON.stringify({"mon": ["14:00", "15:00"], "wed": ["09:00"]}, null, 2),
-    //     loading: false
-    //   });
-    //   console.log("Using placeholder data.");
-    // }, 500); // Simulate network delay
+          console.log('Page data updated with coachConfig:', this.data.coachConfig);
+      } else {
+          // Handle cases where API returned 200 OK but data might be missing/malformed
+          console.error('Received success status but data structure is unexpected:', res);
+          this.setData({ isLoading: false });
+          wx.showToast({ title: '获取配置数据格式错误', icon: 'none' });
+      }
+  })
+  .catch(err => {
+      // Error handling remains the same
+      console.error('Failed to load coach config:', err);
+      this.setData({ isLoading: false });
+      // Toast might already be shown by request.js
+  });
   },
 
   // Function to handle saving the configuration
