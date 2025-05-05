@@ -13,9 +13,9 @@ const { verifyToken } = require('../middleware/auth.middleware.js'); // <--- Imp
 router.get('/config', verifyToken, coachController.getCoachConfig);
 
 // PUT /api/coach/config
-router.put('/config', coachController.updateCoachConfig);
+router.put('/config', verifyToken, coachController.updateCoachConfig);
 
 // GET /api/coach/bookings?date=YYYY-MM-DD
-router.get('/bookings', coachController.getCoachBookingsForDate); // <-- ADD THIS LINE
+router.get('/bookings', verifyToken, coachController.getCoachBookingsForDate); // <-- ADD THIS LINE
 
 module.exports = router;

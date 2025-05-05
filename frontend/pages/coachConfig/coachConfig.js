@@ -7,42 +7,24 @@ Page({
    * 页面的初始数据
    */
   data: {
-    sessionDurationMinutes: null,
-    weeklyTemplate: {}, // Store the template as an object
-    weeklyTemplateStr: '', // For temporary display in textarea
-    loading: false,
-    error: null,
-    isCoach: false, // Flag to control access
-    coachConfig: { // Initialize with expected structure
+    isLoading: true,
+    errorMsg: null, // Add variable for error message
+    coachConfig: { // Keep the structure for the actual data
       coachId: '',
       weeklyTemplate: {},
       sessionDurationMinutes: 0
-    }
+    },
+    weeklyTemplateStr: '' // Add variable for the string representation
   },
 
-  /**
-   * 生命周期函数--监听页面加载
-   */
   onLoad(options) {
-    // **TODO: Implement Coach Authorization Check**
-    // Example: Check if the logged-in user is the designated coach
-    // const userInfo = wx.getStorageSync('userInfo'); // Or however you store user info
-    // const designatedCoachId = 'COACH_OPENID_OR_ID'; // Replace with actual coach identifier
-    // if (!userInfo || userInfo.openid !== designatedCoachId) {
-    //   wx.showToast({ title: '无权访问', icon: 'error' });
-    //   wx.navigateBack(); // Or redirect to index
-    //   return;
-    // }
-    this.setData({ isCoach: true }); // Assume authorized for now
-
-    // Fetch current config when page loads
     this.loadCoachConfig();
   },
 
   // Function to load coach configuration from backend
   loadCoachConfig() {
     console.log('Attempting to fetch coach config via API...');
-    this.setData({ isLoading: true });
+    this.setData({ isLoading: true, errorMsg: null }); // Reset error on load
 
     request({
       url: '/api/coach/config',
@@ -52,96 +34,124 @@ Page({
       // Check if res itself is a valid object and has expected keys (e.g., coachId)
       if (res && res.coachId !== undefined) { // Check for a key property
           console.log('Successfully fetched coach config:', res);
+          const templateString = JSON.stringify(res.weeklyTemplate, null, 2); // Define templateString
           this.setData({
-              coachConfig: res, // Use res directly as it IS the data
-              isLoading: false
-          });
-          console.log('Page data updated with coachConfig:', this.data.coachConfig);
+            coachConfig: res, // Store the actual object
+            weeklyTemplateStr: templateString, // Store the string version for the textarea
+            isLoading: false
+        });
+        console.log('Page data updated:', this.data);
       } else {
-          // Handle cases where API returned 200 OK but data might be missing/malformed
-          console.error('Received success status but data structure is unexpected:', res);
-          this.setData({ isLoading: false });
-          wx.showToast({ title: '获取配置数据格式错误', icon: 'none' });
-      }
+        console.error('Received success status but data structure is unexpected:', res);
+        this.setData({ isLoading: false, errorMsg: '获取配置数据格式错误' });
+        // Removed toast as we now show message in WXML
+        // wx.showToast({ title: '获取配置数据格式错误', icon: 'none' });
+    }
   })
   .catch(err => {
-      // Error handling remains the same
-      console.error('Failed to load coach config:', err);
-      this.setData({ isLoading: false });
-      // Toast might already be shown by request.js
+    console.error('Failed to load coach config:', err);
+    // Set an error message to be displayed in the WXML
+    this.setData({
+        isLoading: false,
+        errorMsg: err.message || '加载配置失败，请检查网络连接' // Use message from request util or generic one
+    });
   });
   },
 
   // Function to handle saving the configuration
+
   onSave() {
-    if (!this.data.isCoach) return; // Don't save if not authorized
-
-    this.setData({ loading: true, error: null });
-
-    let weeklyTemplateObj;
-    try {
-      // Convert the string back to an object for sending
-      // **Important**: Add validation here if using textarea directly!
-      weeklyTemplateObj = JSON.parse(this.data.weeklyTemplateStr || '{}');
-    } catch (e) {
-      wx.showToast({ title: '模板格式错误', icon: 'error' });
-      this.setData({ loading: false, error: '模板JSON格式无效' });
+    console.log("onSave triggered");
+  
+    // 1. Get Current Values
+    const duration = parseInt(this.data.coachConfig.sessionDurationMinutes, 10);
+    const templateStr = this.data.weeklyTemplateStr;
+  
+    // --- Add logging ---
+    console.log("Duration value:", duration);
+    console.log("Template string from textarea:", JSON.stringify(templateStr)); // Log the raw string
+  
+    // 2. Validate Input
+    if (isNaN(duration) || duration <= 0) {
+      wx.showToast({ title: '辅导时长必须是正数', icon: 'none' });
       return;
     }
-
-    const configData = {
-      sessionDurationMinutes: parseInt(this.data.sessionDurationMinutes, 10), // Ensure it's a number
-      weeklyTemplate: weeklyTemplateObj
+  
+    let parsedTemplate;
+    try {
+      // --- Add check for empty/blank string ---
+      if (!templateStr || templateStr.trim() === '') {
+          // Handle empty template specifically, maybe default to empty object or show error
+          // Option 1: Treat as empty schedule
+          // parsedTemplate = {};
+          // Option 2: Show error
+           throw new Error("模板内容不能为空");
+      }
+      // --- End check ---
+  
+      parsedTemplate = JSON.parse(templateStr); // Attempt parsing
+  
+      // --- Basic Structure Validation (Keep this) ---
+      if (typeof parsedTemplate !== 'object' || parsedTemplate === null || Array.isArray(parsedTemplate)) {
+          throw new Error("模板必须是JSON对象格式");
+      }
+      const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+      for (const day in parsedTemplate) {
+          if (!days.includes(day)) throw new Error(`无效的星期名称: ${day}`);
+          if (!Array.isArray(parsedTemplate[day])) throw new Error(`${day}的值必须是数组`);
+          // Further validation for time formats can be added here
+      }
+       // Ensure all days are present, even if empty? (Optional, depends on backend requirement)
+      // days.forEach(day => {
+      //     if (!(day in parsedTemplate)) {
+      //         parsedTemplate[day] = []; // Add missing days with empty array
+      //     }
+      // });
+      // --- End Basic Structure Validation ---
+  
+    } catch (e) {
+      console.error("Failed to parse weeklyTemplateStr:", e);
+      wx.showToast({ title: `模板格式错误: ${e.message || '无效的JSON'}`, icon: 'none', duration: 3000 });
+      return;
+    }
+  
+    // 3. Prepare Data Payload
+    const configToSave = {
+      sessionDurationMinutes: duration,
+      weeklyTemplate: parsedTemplate
     };
-
-    // **TODO: Call Backend API PUT /api/coach/config**
-    // Replace with your actual request function call
-    console.log("Saving coach config:", configData);
-    // Example using a hypothetical request function:
-    // request({ url: '/api/coach/config', method: 'PUT', data: configData })
-    //   .then(res => {
-    //     if (res.success) {
-    //       this.setData({ loading: false });
-    //       wx.showToast({ title: '保存成功', icon: 'success' });
-    //       // Optionally navigate back or refresh something
-    //     } else {
-    //       throw new Error(res.message || '未能保存配置');
-    //     }
-    //   })
-    //   .catch(err => {
-    //     this.setData({ error: err.message || '保存失败', loading: false });
-    //     wx.showToast({ title: '保存失败', icon: 'error' });
-    //   });
-
-    // **Temporary Placeholder Action** (Remove when API call is implemented)
-     setTimeout(() => {
-      this.setData({ loading: false });
-      wx.showToast({ title: '保存成功 (模拟)', icon: 'success' });
-      console.log("Simulated save successful.");
-    }, 500); // Simulate network delay
-  },
-
-  // Helper function to update weeklyTemplateStr when textarea changes
-  // Note: This requires using `model:value` in WXML for the textarea
-  // If not using `model:value`, you'd use a bindinput handler
-  // bindinput="onTemplateInputChange"
-  /*
-  onTemplateInputChange(e) {
-    this.setData({
-      weeklyTemplateStr: e.detail.value
+  
+    console.log("Attempting to save config:", configToSave);
+    wx.showLoading({ title: '保存中...' });
+  
+    // 4. Call Backend API
+    request({
+      url: '/api/coach/config',
+      method: 'PUT',
+      data: configToSave
     })
-  }
-  */
-
-  /**
-   * 生命周期函数--监听页面初次渲染完成
-   */
+    .then(res => {
+      console.log("Save successful:", res);
+      wx.hideLoading();
+      wx.showToast({ title: '保存成功', icon: 'success' });
+      // Optionally reload data
+      // this.loadCoachConfig();
+    })
+    .catch(err => {
+      console.error("Failed to save config:", err);
+      wx.hideLoading();
+      const errMsg = (err && err.response && err.response.data && err.response.data.message)
+                     || err.message
+                     || '保存失败，请稍后重试';
+      wx.showToast({ title: errMsg, icon: 'none', duration: 3000 });
+    });
+  },
   onReady() {},
-
-  /**
-   * 生命周期函数--监听页面显示
-   */
   onShow() {},
-
-  // ... other lifecycle methods
+  onTemplateChange(event) {
+    // console.log('Template input changed:', event.detail.value); // Optional: Log changes
+    this.setData({
+      weeklyTemplateStr: event.detail.value
+    });
+  },
 })

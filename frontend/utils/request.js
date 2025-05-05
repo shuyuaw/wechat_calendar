@@ -32,6 +32,7 @@ const request = (options) => {
     // Add Authorization header if the endpoint requires authentication
     if (requiresAuth) {
       token = wx.getStorageSync('token');
+      console.log(`[Request Util] Token retrieved for ${url}:`, token ? `"${token.substring(0, 15)}..."` : token); // Log beginning of token or null/empty
       if (!token) {
         console.error(`[Request Util] No token found for protected route: ${url}`);
         wx.showToast({ title: '请先登录', icon: 'none' });
