@@ -1,0 +1,65 @@
+/* frontend/pages/coachBookings/coachBookings.wxss */
+.container {
+  padding: 20rpx;
+}
+
+.date-selector {
+  display: flex;
+  align-items: center;
+  padding: 15rpx;
+  background-color: #f7f7f7;
+  border-radius: 8rpx;
+  margin-bottom: 20rpx;
+}
+
+.date-selector label {
+  margin-right: 20rpx;
+}
+
+.picker-display {
+  border: 1px solid #ccc;
+  padding: 10rpx 15rpx;
+  background-color: #fff;
+  border-radius: 4rpx;
+}
+
+.booking-list-section {
+  margin-top: 20rpx;
+}
+
+.loading-message,
+.error-message,
+.no-bookings-message {
+  color: #888;
+  text-align: center;
+  padding: 40rpx 0;
+}
+
+.error-message {
+  color: red;
+}
+
+.booking-list {}
+
+.booking-item {
+  background-color: #fff;
+  border: 1px solid #eee;
+  border-radius: 8rpx;
+  padding: 20rpx;
+  margin-bottom: 15rpx;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.booking-item view {
+  margin-bottom: 8rpx;
+}
+
+.booking-item view:last-child {
+  margin-bottom: 0;
+}
+
+/* Optional button styling */
+.booking-item button {
+  margin-top: 10rpx;
+  float: right;
+}

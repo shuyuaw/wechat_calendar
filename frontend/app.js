@@ -6,9 +6,13 @@ App({
   globalData: {
     userInfo: null, // Placeholder for potential user profile info
     openid: null,   // Store the user's unique OpenID
-    // No need to store token in globalData, using wx.setStorageSync instead
-    // BASE_URL: 'http://localhost:3001/api' // Define base URL if needed elsewhere
   },
+
+  /**
+   * Callback function for pages waiting for OpenID.
+   * Pages can set this in their onLoad if openid isn't ready yet.
+   */
+  openidReadyCallback: null,
 
   /**
    * Lifecycle callback - Called when the Mini Program initializes.
@@ -29,18 +33,13 @@ App({
           console.log('wx.login success, code:', res.code);
           // 2. Send the code to the backend server to exchange for openid and token
           wx.request({
-            // *** IMPORTANT: Replace with your actual backend URL ***
-            // If your server is running locally for testing:
-            url: 'http://localhost:3001/api/login',
-            // If deployed or using a different URL, update this:
-            // url: 'YOUR_DEPLOYED_BACKEND_URL/api/login',
+            url: 'http://localhost:3001/api/login', // Use your actual backend URL
             method: 'POST',
             data: {
               code: res.code
             },
             success: (loginRes) => {
               // 3. Handle the backend response
-              // Check status code and expected data structure from your backend API
               if (loginRes.statusCode === 200 && loginRes.data && loginRes.data.token && loginRes.data.openid) {
                 console.log('Backend /api/login success:', loginRes.data);
 
@@ -48,50 +47,72 @@ App({
                 this.globalData.openid = loginRes.data.openid;
                 console.log('Stored openid in globalData:', this.globalData.openid);
 
-                // --- *** THIS IS THE FIX *** ---
-                // Store the token persistently using WeChat's synchronous storage API
+                // Store the token persistently
                 try {
                   wx.setStorageSync('token', loginRes.data.token);
                   console.log('Token stored successfully in wx.setStorageSync.');
                 } catch (e) {
                   console.error('Failed to store token in wx.setStorageSync:', e);
-                  // Optional: Show an error to the user if storing fails critically
-                  // wx.showToast({ title: '登录状态保存失败', icon: 'error' });
                 }
-                // --- *** END OF FIX *** ---
 
-                // Optional: Store other user info if your login endpoint returns it
-                // this.globalData.userInfo = loginRes.data.userInfo || null;
-
-                // TODO: Maybe trigger a callback or event if pages need to know login is complete
-                // For example, using wx.event or a simple flag/callback system
-
+                // --- Check for and execute the callback ---
+                console.log('[App.js] Checking for openidReadyCallback. Value:', this.openidReadyCallback);
+                if (this.openidReadyCallback) {
+                  console.log('[App.js] Executing openidReadyCallback...');
+                  // Pass the obtained openid to the callback function
+                  this.openidReadyCallback(this.globalData.openid);
+                  // Clear the callback after use to prevent multiple calls if not desired
+                  this.openidReadyCallback = null;
+                } else {
+                   console.log('[App.js] No openidReadyCallback found (or already executed).');
+                }
+                // --- End callback execution ---
 
               } else {
-                // Handle cases where backend returned an error or unexpected data
+                // Handle backend login error
                 console.error('Backend /api/login error response:', loginRes);
-                wx.showToast({ title: '登录失败[Server]', icon: 'none' }); // Use 'none' for custom msg
+                wx.showToast({ title: '登录失败[Server]', icon: 'none' });
+                // If login fails, make sure any waiting callback knows (optional)
+                if (this.openidReadyCallback) {
+                    console.log('[App.js] Executing openidReadyCallback with null due to login failure.');
+                    this.openidReadyCallback(null); // Pass null to indicate failure
+                    this.openidReadyCallback = null;
+                }
               }
             },
             fail: (err) => {
-              // Handle network errors or failure to reach the backend
+              // Handle network errors
               console.error('wx.request to /api/login failed:', err);
               wx.showToast({ title: '网络错误，请稍后重试', icon: 'none' });
+              // If login fails, make sure any waiting callback knows (optional)
+               if (this.openidReadyCallback) {
+                    console.log('[App.js] Executing openidReadyCallback with null due to network failure.');
+                    this.openidReadyCallback(null); // Pass null to indicate failure
+                    this.openidReadyCallback = null;
+               }
             }
           });
         } else {
-          // Handle cases where wx.login itself fails to get a code
+          // Handle wx.login failure
           console.error('wx.login failed to get code:', res);
           wx.showToast({ title: '微信登录接口调用失败', icon: 'none' });
+           if (this.openidReadyCallback) {
+               console.log('[App.js] Executing openidReadyCallback with null due to wx.login failure.');
+               this.openidReadyCallback(null); // Pass null to indicate failure
+               this.openidReadyCallback = null;
+           }
         }
       },
       fail: err => {
-        // Handle errors in the wx.login call itself
+        // Handle wx.login call failure
         console.error('wx.login API call failed:', err);
         wx.showToast({ title: '微信登录失败', icon: 'none' });
+         if (this.openidReadyCallback) {
+             console.log('[App.js] Executing openidReadyCallback with null due to wx.login API failure.');
+             this.openidReadyCallback(null); // Pass null to indicate failure
+             this.openidReadyCallback = null;
+         }
       }
     });
   }
-
-  // You can add other global methods or properties here if needed
 })

@@ -1,0 +1,30 @@
+<view class="container">
+  <view class="date-selector">
+    <label>选择日期:</label>
+    <picker mode="date" value="{{selectedDate}}" bindchange="onDateChange">
+      <view class="picker-display">
+        {{selectedDate}}
+      </view>
+    </picker>
+  </view>
+
+  <view class="booking-list-section">
+    <view wx:if="{{isLoading}}" class="loading-message">加载预约中...</view>
+
+    <view wx:if="{{!isLoading && errorMsg}}" class="error-message">
+      错误: {{errorMsg}}
+    </view>
+
+    <block wx:if="{{!isLoading && !errorMsg}}">
+      <view wx:if="{{bookings.length === 0}}" class="no-bookings-message">
+        {{selectedDate}} 无预约
+      </view>
+
+      <view wx:else class="booking-list">
+        <view class="booking-item" wx:for="{{bookings}}" wx:key="_id">
+          <view>时间: {{item.startTime}} - {{item.endTime}}</view>
+          <view>学员: {{item.userId || '未知'}}</view> </view>
+      </view>
+    </block>
+  </view>
+</view>

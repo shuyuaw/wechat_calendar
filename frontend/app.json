@@ -2,7 +2,8 @@
   "pages": [
     "pages/index/index",
     "pages/myBookings/myBookings",
-    "pages/coachConfig/coachConfig"
+    "pages/coachConfig/coachConfig",
+    "pages/coachBookings/coachBookings"
   ],
   "window": {
     "navigationBarTextStyle": "black",

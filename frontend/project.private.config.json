@@ -10,6 +10,13 @@
     "miniprogram": {
       "list": [
         {
+          "name": "测试教练预约页",
+          "pathName": "pages/coachBookings/coachBookings",
+          "query": "",
+          "launchMode": "default",
+          "scene": null
+        },
+        {
           "name": "测试教练配置页",
           "pathName": "pages/coachConfig/coachConfig",
           "query": "",
