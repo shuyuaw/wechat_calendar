@@ -29,12 +29,6 @@ Page({
           this.handleAuthorizationFailure("登录失败");
         }
       };
-      if (!app.globalData.openid) {
-        // It's generally good practice to inform the user or log critical warnings
-        // if something essential like login might have failed.
-        // However, per your request, all console logs are removed.
-        // Consider if any critical error logging should be retained or handled differently.
-      }
     }
   },
 
@@ -65,47 +59,78 @@ Page({
   },
 
   fetchBookings() {
+    console.log('--- fetchBookings function started ---'); // Log 8
     if (!this.data.isCoach) {
+      console.warn("fetchBookings called without authorization flag set.");
       return;
     }
-
     this.setData({ isLoading: true, errorMsg: null, bookings: [] });
-    const date = this.data.selectedDate;
+    const dateToFetch = this.data.selectedDate;
+    console.log(`Log 9: Fetching bookings for date (read from this.data.selectedDate): ${dateToFetch}. Making request call next...`);
 
     request({
-      url: `/api/coach/bookings?date=${date}`,
+      url: `/api/coach/bookings?date=${dateToFetch}`,
       method: 'GET',
     })
-      .then(res => {
-        if (Array.isArray(res)) {
+  .then(apiResponseBookings => { // Renamed 'res' to 'apiResponseBookings' for clarity
+    console.log('Log 10: Raw response received in fetchBookings:', JSON.stringify(apiResponseBookings));
+
+    if (Array.isArray(apiResponseBookings)) {
+      // --- Format the times for display ---
+      const formattedBookings = apiResponseBookings.map(booking => {
+        // Basic time extraction (assumes YYYY-MM-DDTHH:MM:SS format)
+        const startTimeShort = booking.startTime ? booking.startTime.substring(11, 16) : 'N/A';
+        const endTimeShort = booking.endTime ? booking.endTime.substring(11, 16) : 'N/A';
+        return {
+          ...booking, // Keep all original booking properties
+          displayStartTime: startTimeShort,
+          displayEndTime: endTimeShort
+        };
+      });
+      // --- End formatting ---
+
+      console.log(`Log 11: Successfully fetched and formatted ${formattedBookings.length} bookings. Data:`, formattedBookings);
           this.setData({
-            bookings: res,
+        bookings: formattedBookings, // Use the new array with formatted times
             isLoading: false
           });
+        console.log('Log 12: this.data.bookings after setData:', this.data.bookings);
         } else {
-          this.setData({ isLoading: false, errorMsg: '返回数据格式错误' });
+      console.error("Log 13: Invalid data format received for bookings:", apiResponseBookings);
+      this.setData({ isLoading: false, errorMsg: '返回数据格式错误', bookings: [] });
         }
       })
       .catch(err => {
+      console.error("Log 14: Failed to fetch bookings:", err);
         this.setData({
           isLoading: false,
-          errorMsg: `加载失败: ${err.errMsg || '请稍后重试'}`,
-          bookings: []
-        });
-        wx.showToast({
-          title: `加载失败: ${err.errMsg || '网络错误'}`,
-          icon: 'none',
-          duration: 2000
+        errorMsg: err.message || '加载预约失败'
         });
       });
   },
 
   onDateChange(event) {
+    console.log('--- onDateChange function started ---'); // Log 1
+    if (event && event.detail) {
     const newDate = event.detail.value;
+      console.log(`Log 2: Date selected in picker (event.detail.value): ${newDate}`);
+
     this.setData({
       selectedDate: newDate
     });
-    this.fetchBookings();
+      console.log(`Log 3: this.data.selectedDate IMMEDIATELY after setData: ${this.data.selectedDate}`);
+
+      if (this.data.isCoach) {
+        console.log('Log 4: Calling fetchBookings from onDateChange...');
+        this.fetchBookings(); // Call fetchBookings
+      } else {
+        console.warn('Log 5: Not calling fetchBookings in onDateChange because not authorized.');
+      }
+    } else {
+      console.error('Log 6: onDateChange triggered but event or event.detail is undefined.');
+    }
+    console.log('--- onDateChange function ended ---'); // Log 7
   },
 
-})
+  // ... other methods like onCancelBooking if present ...
+});

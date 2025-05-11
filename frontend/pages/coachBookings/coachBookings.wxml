@@ -22,8 +22,9 @@
 
       <view wx:else class="booking-list">
         <view class="booking-item" wx:for="{{bookings}}" wx:key="_id">
-          <view>时间: {{item.startTime}} - {{item.endTime}}</view>
-          <view>学员: {{item.userId || '未知'}}</view> </view>
+          <view>时间: {{item.displayStartTime}} - {{item.displayEndTime}}</view>
+          <view>学员ID: {{item.userId || '未知'}}</view>
+        </view>
       </view>
     </block>
   </view>
