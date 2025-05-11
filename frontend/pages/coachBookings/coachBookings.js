@@ -1,18 +1,12 @@
-// frontend/pages/coachBookings/coachBookings.js
-console.log('--- coachBookings.js file executing ---'); // <-- Log 1
-
 const { request } = require('../../utils/request.js');
 const app = getApp();
 const formatDate = (date) => {
-  // ... (keep formatDate function)
   const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
-const DESIGNATED_COACH_OPENID = 'oc5am7UF8nlgd-3LxJQrgMG84ews'; // Replace with actual ID
-
-console.log('--- coachBookings.js imports done, defining Page ---'); // <-- Log 2
+const DESIGNATED_COACH_OPENID = 'oc5am7UF8nlgd-3LxJQrgMG84ews';
 
 Page({
   data: {
@@ -25,17 +19,10 @@ Page({
   },
 
   onLoad(options) {
-    console.log('--- coachBookings.js onLoad triggered ---'); // <-- Log 3
-
-    // --- Authorization Check ---
-    // (Keep the rest of your onLoad, checkAuthorization, handleAuthorizationFailure logic here)
     if (app.globalData.openid) {
-      console.log("OpenID found in globalData on coachBookings load");
       this.checkAuthorization(app.globalData.openid);
     } else {
-      console.log("OpenID not found on coachBookings load, setting up callback");
       app.openidReadyCallback = openid => {
-        console.log("openidReadyCallback executed in coachBookings");
         if (openid) {
           this.checkAuthorization(openid);
         } else {
@@ -43,66 +30,82 @@ Page({
         }
       };
       if (!app.globalData.openid) {
-        console.warn("Login might have failed or is severely delayed.");
+        // It's generally good practice to inform the user or log critical warnings
+        // if something essential like login might have failed.
+        // However, per your request, all console logs are removed.
+        // Consider if any critical error logging should be retained or handled differently.
       }
     }
-    // --- End Authorization Check ---
   },
 
   checkAuthorization(openid) {
-    console.log('--- coachBookings.js checkAuthorization called ---');
-    console.log("Checking authorization for openid:", openid);
-    console.log("Comparing against DESIGNATED_COACH_OPENID:", DESIGNATED_COACH_OPENID);
     if (openid === DESIGNATED_COACH_OPENID) {
-      console.log("Authorization successful: User is the coach."); // Add this log
       this.setData({
         isCoach: true,
         openid: openid
       });
-      // --- ADD THIS LOG ---
-      console.log("Set isCoach=true in data. Current this.data.isCoach:", this.data.isCoach);
-      // --- END ADD LOG ---
       this.fetchBookings();
     } else {
-      // ... handle failure ...
+      this.handleAuthorizationFailure("您没有权限查看此页面");
     }
   },
 
   handleAuthorizationFailure(message) {
-    console.log('--- coachBookings.js handleAuthorizationFailure called ---'); // <-- Log 5
-    // ... (rest of handleAuthorizationFailure logic) ...
+    this.setData({
+      isLoading: false,
+      errorMsg: message,
+      isCoach: false,
+      bookings: []
+    });
+    wx.showToast({
+      title: message,
+      icon: 'none',
+      duration: 2000
+    });
   },
 
-
   fetchBookings() {
-    console.log('--- coachBookings.js fetchBookings called ---'); // <-- Log 6
-
-    // --- ADD THIS LOG ---
-    console.log("Checking this.data.isCoach inside fetchBookings:", this.data.isCoach);
     if (!this.data.isCoach) {
-      console.warn("fetchBookings exiting because !this.data.isCoach."); // Add this log
       return;
     }
-    // --- END ADD LOG ---
 
-    // --- ADD THIS LOG ---
-    console.log("Setting loading state...");
     this.setData({ isLoading: true, errorMsg: null, bookings: [] });
     const date = this.data.selectedDate;
-    // --- ADD THIS LOG ---
-    console.log(`Workspaceing bookings for date: ${date}. Making request call next...`);
 
-    request({ // Execution seems to stop before or during this
+    request({
       url: `/api/coach/bookings?date=${date}`,
       method: 'GET',
     })
       .then(res => {
-        // ... success handling ...
+        if (Array.isArray(res)) {
+          this.setData({
+            bookings: res,
+            isLoading: false
+          });
+        } else {
+          this.setData({ isLoading: false, errorMsg: '返回数据格式错误' });
+        }
       })
       .catch(err => {
-        // ... error handling ...
+        this.setData({
+          isLoading: false,
+          errorMsg: `加载失败: ${err.errMsg || '请稍后重试'}`,
+          bookings: []
+        });
+        wx.showToast({
+          title: `加载失败: ${err.errMsg || '网络错误'}`,
+          icon: 'none',
+          duration: 2000
+        });
       });
   },
 
-  // ... onDateChange, onCancelBooking ...
+  onDateChange(event) {
+    const newDate = event.detail.value;
+    this.setData({
+      selectedDate: newDate
+    });
+    this.fetchBookings();
+  },
+
 })
