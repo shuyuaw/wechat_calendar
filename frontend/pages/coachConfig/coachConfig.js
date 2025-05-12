@@ -21,7 +21,6 @@ Page({
     this.loadCoachConfig();
   },
 
-  // Function to load coach configuration from backend
   loadCoachConfig() {
     console.log('Attempting to fetch coach config via API...');
     this.setData({ isLoading: true, errorMsg: null }); // Reset error on load
@@ -57,8 +56,6 @@ Page({
     });
   });
   },
-
-  // Function to handle saving the configuration
 
   onSave() {
     console.log("onSave triggered");
@@ -146,12 +143,21 @@ Page({
       wx.showToast({ title: errMsg, icon: 'none', duration: 3000 });
     });
   },
+
   onReady() {},
+
   onShow() {},
+
   onTemplateChange(event) {
     // console.log('Template input changed:', event.detail.value); // Optional: Log changes
     this.setData({
       weeklyTemplateStr: event.detail.value
     });
   },
+
+  goToViewBookings() {
+    wx.navigateTo({
+      url: '/pages/coachBookings/coachBookings'
+    });
+  }
 })

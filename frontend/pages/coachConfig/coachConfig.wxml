@@ -1,11 +1,11 @@
-<view class="container">
+<view class="container page-container-safe-coach">
   <block wx:if="{{!isLoading && !errorMsg}}">
     <view class="form-group">
       <label>单节辅导时长 (分钟):</label>
       <input type="number" model:value="{{coachConfig.sessionDurationMinutes}}" placeholder="例如: 60" />
     </view>
 
-<view class="form-group">
+    <view class="form-group">
       <label>每周可预约时间模板 (JSON):</label>
       <textarea
         class="template-input"
@@ -16,9 +16,10 @@
       />
     </view>
 
-    <button type="primary" bindtap="onSave">保存设置</button>
+    <button type="primary" bindtap="onSave" class="button-save">保存设置</button>
+    <button type="default" class="nav-button" bindtap="goToViewBookings">查看预约</button>
   </block>
 
-  <view wx:if="{{isLoading}}">加载中...</view>
-  <view wx:if="{{!isLoading && errorMsg}}">错误: {{errorMsg}}</view>
+  <view wx:if="{{isLoading}}" class="loading-message">加载中...</view>
+  <view wx:if="{{!isLoading && errorMsg}}" class="error-message">错误: {{errorMsg}}</view>
 </view>

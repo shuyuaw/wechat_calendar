@@ -1,6 +1,19 @@
 /* frontend/pages/coachConfig/coachConfig.wxss */
+.page-container-safe-coach { /* Using a specific class name */
+  padding-top: env(safe-area-inset-top);
+  /* Add a little extra fixed padding if the title still feels too close,
+     or for devices without significant safe area insets.
+     Adjust this value as needed. */
+  padding-top: calc(env(safe-area-inset-top) + 20rpx);
+  box-sizing: border-box; /* Ensures padding doesn't add to the total width/height if you set them */
+}
+
+/* Optional: Add any existing styles for .container or .form-group if needed,
+   but the safe area padding is the main focus here. */
 .container {
-  padding: 20rpx;
+  padding-left: 20rpx; /* Keep existing horizontal padding if any */
+  padding-right: 20rpx;
+  padding-bottom: 20rpx; /* Add some bottom padding too */
 }
 
 .form-group {
@@ -14,19 +27,14 @@
 }
 
 .form-group input,
-.form-group .template-input {
+.template-input { /* Assuming .template-input is for your textarea */
   border: 1px solid #ccc;
   padding: 10rpx;
   width: 100%;
-  box-sizing: border-box; /* Include padding and border in the element's total width and height */
+  box-sizing: border-box;
 }
 
-.template-hint {
-  font-size: 24rpx;
-  color: #888;
-  margin-top: 10rpx;
-}
-
-button {
+.button-save,
+.nav-button {
   margin-top: 20rpx;
 }
