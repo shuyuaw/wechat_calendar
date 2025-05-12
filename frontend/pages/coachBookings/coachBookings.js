@@ -132,5 +132,10 @@ Page({
     console.log('--- onDateChange function ended ---'); // Log 7
   },
 
+  goToConfigPage() {
+    wx.navigateTo({
+      url: '/pages/coachConfig/coachConfig'
+    });
+  }
   // ... other methods like onCancelBooking if present ...
 });

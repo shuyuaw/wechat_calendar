@@ -1,11 +1,19 @@
 <view class="container">
-  <view class="date-selector">
-    <label>选择日期:</label>
-    <picker mode="date" value="{{selectedDate}}" bindchange="onDateChange">
-      <view class="picker-display">
-        {{selectedDate}}
+  <view class="container page-container-safe-bookings">
+    <view class="controls-bar">
+      <view class="date-selector">
+        <label>选择日期:</label>
+        <picker mode="date" value="{{selectedDate}}" bindchange="onDateChange">
+          <view class="picker-display">
+            {{selectedDate}}
+          </view>
+        </picker>
       </view>
-    </picker>
+      <button size="mini" type="default" class="nav-button-config" bindtap="goToConfigPage">时间设置</button>
+    </view>
+
+    <view class="booking-list-section">
+      </view>
   </view>
 
   <view class="booking-list-section">
@@ -29,3 +37,4 @@
     </block>
   </view>
 </view>
+

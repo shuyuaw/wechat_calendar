@@ -12,7 +12,6 @@
         value="{{weeklyTemplateStr}}"
         bindinput="onTemplateChange"
         placeholder="加载的模板将显示在此处"
-        auto-height
       />
     </view>
 
@@ -23,3 +22,6 @@
   <view wx:if="{{isLoading}}" class="loading-message">加载中...</view>
   <view wx:if="{{!isLoading && errorMsg}}" class="error-message">错误: {{errorMsg}}</view>
 </view>
+
+<view class="container page-container-safe-bookings">
+  </view>

@@ -32,6 +32,7 @@
   padding: 10rpx;
   width: 100%;
   box-sizing: border-box;
+  height: 300rpx;
 }
 
 .button-save,

@@ -1,8 +1,9 @@
 /* frontend/pages/coachBookings/coachBookings.wxss */
 .container {
-  padding: 20rpx;
+  padding-left: 20rpx;
+  padding-right: 20rpx;
+  padding-bottom: 20rpx; /* Or as desired */
 }
-
 .date-selector {
   display: flex;
   align-items: center;
@@ -62,4 +63,11 @@
 .booking-item button {
   margin-top: 10rpx;
   float: right;
+}
+
+.page-container-safe-bookings { /* Specific class name */
+  padding-top: env(safe-area-inset-top);
+  /* Add a bit more for visual separation from the default nav bar title. Adjust as needed. */
+  padding-top: calc(env(safe-area-inset-top) + 20rpx);
+  box-sizing: border-box;
 }
