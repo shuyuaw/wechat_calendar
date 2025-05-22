@@ -59,49 +59,45 @@ Page({
   },
 
   fetchBookings() {
-    console.log('--- fetchBookings function started ---'); // Log 8
     if (!this.data.isCoach) {
       console.warn("fetchBookings called without authorization flag set.");
       return;
     }
     this.setData({ isLoading: true, errorMsg: null, bookings: [] });
     const dateToFetch = this.data.selectedDate;
-    console.log(`Log 9: Fetching bookings for date (read from this.data.selectedDate): ${dateToFetch}. Making request call next...`);
+    console.log(`Workspaceing bookings for date: ${dateToFetch}.`); // MODIFIED (from Log 9)
 
     request({
       url: `/api/coach/bookings?date=${dateToFetch}`,
       method: 'GET',
     })
-  .then(apiResponseBookings => { // Renamed 'res' to 'apiResponseBookings' for clarity
-    console.log('Log 10: Raw response received in fetchBookings:', JSON.stringify(apiResponseBookings));
+    .then(apiResponseBookings => {
+      console.log(`Received API response for bookings on ${dateToFetch}. Count: ${Array.isArray(apiResponseBookings) ? apiResponseBookings.length : 'N/A (not an array)'}`);
+
 
     if (Array.isArray(apiResponseBookings)) {
-      // --- Format the times for display ---
       const formattedBookings = apiResponseBookings.map(booking => {
-        // Basic time extraction (assumes YYYY-MM-DDTHH:MM:SS format)
         const startTimeShort = booking.startTime ? booking.startTime.substring(11, 16) : 'N/A';
         const endTimeShort = booking.endTime ? booking.endTime.substring(11, 16) : 'N/A';
         return {
-          ...booking, // Keep all original booking properties
+            ...booking,
           displayStartTime: startTimeShort,
           displayEndTime: endTimeShort
         };
       });
-      // --- End formatting ---
 
-      console.log(`Log 11: Successfully fetched and formatted ${formattedBookings.length} bookings. Data:`, formattedBookings);
+        console.log(`Successfully fetched and formatted ${formattedBookings.length} bookings for ${dateToFetch}.`); // MODIFIED (from Log 11)
           this.setData({
-        bookings: formattedBookings, // Use the new array with formatted times
+          bookings: formattedBookings,
             isLoading: false
           });
-        console.log('Log 12: this.data.bookings after setData:', this.data.bookings);
         } else {
-      console.error("Log 13: Invalid data format received for bookings:", apiResponseBookings);
+        console.error(`Invalid data format received for bookings on ${dateToFetch}:`, apiResponseBookings); // MODIFIED (from Log 13) to include date
       this.setData({ isLoading: false, errorMsg: '返回数据格式错误', bookings: [] });
         }
       })
       .catch(err => {
-      console.error("Log 14: Failed to fetch bookings:", err);
+      console.error(`Failed to fetch bookings for date ${dateToFetch}:`, err); // MODIFIED (from Log 14) to include date
         this.setData({
           isLoading: false,
         errorMsg: err.message || '加载预约失败'
@@ -110,26 +106,21 @@ Page({
   },
 
   onDateChange(event) {
-    console.log('--- onDateChange function started ---'); // Log 1
     if (event && event.detail) {
     const newDate = event.detail.value;
-      console.log(`Log 2: Date selected in picker (event.detail.value): ${newDate}`);
 
     this.setData({
       selectedDate: newDate
     });
-      console.log(`Log 3: this.data.selectedDate IMMEDIATELY after setData: ${this.data.selectedDate}`);
 
       if (this.data.isCoach) {
-        console.log('Log 4: Calling fetchBookings from onDateChange...');
-        this.fetchBookings(); // Call fetchBookings
+        this.fetchBookings();
       } else {
-        console.warn('Log 5: Not calling fetchBookings in onDateChange because not authorized.');
+        console.warn('Not calling fetchBookings in onDateChange because user is not authorized.'); // Log 5 - KEPT (context improved)
       }
     } else {
-      console.error('Log 6: onDateChange triggered but event or event.detail is undefined.');
+      console.error('onDateChange triggered but event or event.detail is undefined.'); // Log 6 - KEPT
     }
-    console.log('--- onDateChange function ended ---'); // Log 7
   },
 
   goToConfigPage() {
