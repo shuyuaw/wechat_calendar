@@ -1,4 +1,5 @@
 // frontend/pages/index/index.js
+const { request } = require('../../utils/request.js'); // Adjust path if needed
 const app = getApp(); // Get the global app instance to access globalData
 
 // Helper function to format Date object to 'YYYY-MM-DD' string
@@ -174,45 +175,40 @@ Page({
         // Replace with your actual backend URL if different
         const apiUrl = 'http://localhost:3001/api/bookings';
 
-        wx.request({
-            url: apiUrl,
-            method: 'POST',
-            data: {
-                slotId: Number(slotId), // Ensure slotId is sent as a number
-                userId: userId
-            },
-            success: (res) => {
-                console.log('Booking API response:', res);
-                if (res.statusCode === 201) { // 201 Created is the typical success code for POST
-                    wx.showToast({ title: '预约成功!', icon: 'success', duration: 2000 });
-                    // Refresh the slot list after successful booking
-                    this.fetchAvailableSlots(); // Call fetch again
-                } else if (res.statusCode === 409) { // 409 Conflict (Already booked)
-                    wx.showToast({ title: '手慢了，时段已被预约', icon: 'none', duration: 2500 });
-                    // Refresh the list to show the updated status
-                    this.fetchAvailableSlots(); // Call fetch again
-                } else {
-                    // Other errors from backend
-                    const errorMsg = res.data && res.data.error ? res.data.error : '请稍后重试';
-                    console.error('Booking failed with status:', res.statusCode, 'data:', res.data);
-                    wx.showToast({ title: `预约失败: ${errorMsg}`, icon: 'none', duration: 2500 });
-                    this.setData({ isLoading: false }); // Reset loading state on error
-                }
-            },
-            fail: (err) => {
-                console.error('wx.request failed (booking):', err);
-                wx.showToast({ title: '网络错误，预约失败', icon: 'none', duration: 2000 });
-                this.setData({ isLoading: false }); // Reset loading state on error
-            },
-            complete: () => {
-                // isLoading might already be false from success/error, but ensure hideLoading is called
-                wx.hideLoading();
-                // Ensure isLoading is reset if not already done in success/fail
-                if(this.data.isLoading) {
-                    this.setData({ isLoading: false });
-                }
-            }
-        });
+        request({ // Use the request utility
+        url: '/api/bookings', // Relative path, as request utility adds BASE_URL
+        method: 'POST',
+        data: {
+            slotId: Number(slotId),
+            userId: userId // Backend uses openid from token for userId if needed, but sending is fine
+        },
+        // requiresAuth will default to true, so token will be sent
+    })
+    .then(response => {
+        console.log('Booking API response:', response);
+
+        wx.showToast({ title: '预约成功!', icon: 'success', duration: 2000 });
+
+        // Add a short delay before fetching slots to allow toast to be seen
+        setTimeout(() => {
+            this.fetchAvailableSlots();
+        }, 1500); // Delay for 1.5 seconds (toast duration is 2 seconds)
+    })
+    .catch(err => {
+        console.error('Booking API request failed:', err);
+        if (err.statusCode === 409) { // Conflict (Already booked)
+            wx.showToast({ title: '手慢了，时段已被预约', icon: 'none', duration: 2500 });
+            this.fetchAvailableSlots(); // Refresh slots
+        } else {
+            // Other errors from backend or network errors handled by request utility
+            const errorMsg = err.message || '请稍后重试';
+            wx.showToast({ title: `预约失败: ${errorMsg}`, icon: 'none', duration: 2500 });
+        }
+    })
+    .finally(() => { // Use finally if your Promise setup supports it, or handle in both then/catch
+        wx.hideLoading();
+        this.setData({ isLoading: false });
+    });
     }
 
     // Add other methods like onPullDownRefresh if needed:

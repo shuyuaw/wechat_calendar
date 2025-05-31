@@ -8,6 +8,7 @@ const {
   formatISO,
   startOfWeek, // <-- Add startOfWeek
   endOfWeek,   // <-- Add endOfWeek
+  addDays,
 } = require('date-fns');
 
 // Controller function to get slots for a specific date
@@ -70,57 +71,54 @@ const getSlotsForDate = async (req, res) => {
 };
 
 // Controller function to get AVAILABLE slots for a specific week
-const getSlotsForWeek = async (req, res) => {
-  const requestedStartDate = req.query.startDate; // e.g., ?startDate=2025-05-10
 
-  // --- Validate Input Date ---
+const getSlotsForWeek = async (req, res) => {
+  const requestedStartDate = req.query.startDate; // This is 'today' from frontend
+
   if (!requestedStartDate) {
     return res.status(400).json({ error: 'Missing required query parameter: startDate (YYYY-MM-DD).' });
   }
-  const parsedDate = parseDate(requestedStartDate, 'yyyy-MM-dd', new Date());
-  if (!isValidDate(parsedDate)) {
-    return res.status(400).json({ error: 'Invalid startDate format. Please use YYYY-MM-DD.' });
+  const parsedStartDate = parseDate(requestedStartDate, 'yyyy-MM-dd', new Date());
+  if (!isValidDate(parsedStartDate)) {
+    return res.status(400).json({ error: 'Invalid startDate format. Please use yyyy-MM-dd.' });
   }
-  // --- End Validation ---
 
-  // --- Calculate Week Range (Assuming Monday as start of week) ---
-  const weekStart = startOfWeek(parsedDate, { weekStartsOn: 1 }); // 1 = Monday
-  const weekEnd = endOfWeek(parsedDate, { weekStartsOn: 1 });
+  // Fetch slots for the next 7 days starting from parsedStartDate (today)
+  const queryRangeStart = startOfDay(parsedStartDate);
+  const queryRangeEnd = endOfDay(addDays(parsedStartDate, 6)); // Today + 6 more days = 7 day window
 
-  const startTimeQuery = formatISO(weekStart);
-  // Use the very end of the last day of the week for comparison
-  const endTimeQuery = formatISO(endOfDay(weekEnd));
-  // --- End Date Range Calculation ---
+  const startTimeQuery = formatISO(queryRangeStart);
+  const endTimeQuery = formatISO(queryRangeEnd);
 
-  // TODO: Determine coachId dynamically
-  const coachId = 'COACH_001'; // Hardcoding for now
+  const designatedCoachId = process.env.COACH_OPENID;
+  if (!designatedCoachId) {
+      console.error("COACH_OPENID is not set in environment variables. Cannot fetch slots.");
+      return res.status(500).json({ error: 'Server configuration error: Coach ID missing.' });
+  }
 
   try {
-    // --- Database Query ---
     const sql = `
       SELECT slotId, startTime, endTime, status
       FROM AvailabilitySlots
       WHERE coachId = ?
-        AND status = 'available' -- Only fetch available slots
-        AND startTime >= ?       -- Start of the week (Monday 00:00)
-        AND startTime <= ?       -- End of the week (Sunday 23:59:59...)
+        AND status = 'available'
+        AND startTime >= ?
+        AND startTime <= ?
       ORDER BY startTime ASC
     `;
 
-    console.log(`Querying available slots for week starting around ${requestedStartDate}: ${startTimeQuery} to ${endTimeQuery}`);
+    console.log(`[SlotController] Querying available slots from ${startTimeQuery} to ${endTimeQuery} for coach ${designatedCoachId}`);
 
-    db.all(sql, [coachId, startTimeQuery, endTimeQuery], (err, rows) => {
+    db.all(sql, [designatedCoachId, startTimeQuery, endTimeQuery], (err, rows) => {
       if (err) {
-        console.error(`Database error fetching slots for week around ${requestedStartDate}:`, err.message);
-        return res.status(500).json({ error: 'Database error fetching weekly slots.' });
+        console.error(`[SlotController] Database error fetching slots for date range:`, err.message);
+        return res.status(500).json({ error: 'Database error fetching slots for date range.' });
       }
       res.status(200).json(rows || []);
     });
-    // --- End Database Query ---
-
   } catch (error) {
-    console.error(`Error in getSlotsForWeek controller for startDate ${requestedStartDate}:`, error.message);
-    res.status(500).json({ error: 'Failed to retrieve weekly slots.' });
+    console.error(`[SlotController] Error in getSlotsForWeek controller:`, error.message);
+    res.status(500).json({ error: 'Failed to retrieve slots for date range.' });
   }
 };
 
