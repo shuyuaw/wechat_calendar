@@ -8,11 +8,7 @@ App({
     openid: null,   // Store the user's unique OpenID
   },
 
-  /**
-   * Callback function for pages waiting for OpenID.
-   * Pages can set this in their onLoad if openid isn't ready yet.
-   */
-  openidReadyCallback: null,
+  // openidReadyCallback: null, // REMOVED THIS
 
   /**
    * Lifecycle callback - Called when the Mini Program initializes.
@@ -40,10 +36,8 @@ App({
             success: (loginRes) => {
               // 3. Handle the backend response
               if (loginRes.statusCode === 200 && loginRes.data && loginRes.data.token && loginRes.data.openid) {
-                console.log('Backend /api/login successful. OpenID and Token received.');
-
                 // Store the OpenID in globalData
-                this.globalData.openid = loginRes.data.openid;
+                this.globalData.openid = loginRes.data.openid; // This is key
 
                 // Store the token persistently
                 try {
@@ -51,54 +45,35 @@ App({
                 } catch (e) {
                   console.error('Failed to store token in wx.setStorageSync:', e);
                 }
+                console.log('App.js: Login successful, openid and token stored.');
 
-                // --- Check for and execute the callback ---
-                if (this.openidReadyCallback) {
-                  // Pass the obtained openid to the callback function
-                  this.openidReadyCallback(this.globalData.openid);
-                  // Clear the callback after use
-                  this.openidReadyCallback = null;
-                }
-                // --- End callback execution ---
-
+                // REMOVED THE IF BLOCK FOR this.openidReadyCallback
               } else {
                 // Handle backend login error
-                console.error('Backend /api/login error response:', loginRes);
+                console.error('App.js: Backend login failed.', loginRes); // MODIFIED console log
                 wx.showToast({ title: '登录失败[Server]', icon: 'none' });
-                if (this.openidReadyCallback) {
-                    this.openidReadyCallback(null); // Pass null to indicate failure
-                    this.openidReadyCallback = null;
-                }
+                // REMOVED ANY CALLS TO this.openidReadyCallback
               }
             },
             fail: (err) => {
               // Handle network errors
-              console.error('wx.request to /api/login failed:', err);
+              console.error('App.js: wx.request to /api/login failed.', err); // MODIFIED console log
               wx.showToast({ title: '网络错误，请稍后重试', icon: 'none' });
-               if (this.openidReadyCallback) {
-                    this.openidReadyCallback(null); // Pass null to indicate failure
-                    this.openidReadyCallback = null;
-               }
+              // REMOVED ANY CALLS TO this.openidReadyCallback
             }
           });
         } else {
           // Handle wx.login failure
-          console.error('wx.login failed to get code:', res);
+          console.error('App.js: wx.login failed to get code.', res); // MODIFIED console log
           wx.showToast({ title: '微信登录接口调用失败', icon: 'none' });
-           if (this.openidReadyCallback) {
-               this.openidReadyCallback(null); // Pass null to indicate failure
-               this.openidReadyCallback = null;
-           }
+          // REMOVED ANY CALLS TO this.openidReadyCallback
         }
       },
       fail: err => {
         // Handle wx.login call failure
-        console.error('wx.login API call failed:', err);
+        console.error('App.js: wx.login API call failed.', err); // MODIFIED console log
         wx.showToast({ title: '微信登录失败', icon: 'none' });
-         if (this.openidReadyCallback) {
-             this.openidReadyCallback(null); // Pass null to indicate failure
-             this.openidReadyCallback = null;
-         }
+        // REMOVED ANY CALLS TO this.openidReadyCallback
       }
     });
   }

@@ -1,5 +1,6 @@
 // frontend/pages/myBookings/myBookings.js
-const app = getApp(); // Get the global app instance
+const { request } = require('../../utils/request.js'); // Adjusted path assuming utils is in the root of the project, or ../../utils if utils is sibling to pages
+const app = getApp();
 
 // Helper function (can be moved to utils.js)
 const formatBookingTime = (isoString) => {
@@ -27,7 +28,8 @@ Page({
    */
   data: {
     myBookings: [],
-    isLoading: false,
+    // MODIFIED: Start with loading true, as we will fetch in onShow
+    isLoading: true,
     error: null,
     // Store openid here if needed, though fetching from global is fine
     // openid: null
@@ -37,72 +39,106 @@ Page({
    * Lifecycle function--Called when page show
    * Use onShow to refresh data every time the page appears
    */
+  // MODIFIED: Replaced onShow with new logic
   onShow: function () {
-    console.log('MyBookings page shown');
-    // Ensure user openid is available before fetching
-    if (app.globalData.openid) {
-        // If openid is already available, fetch bookings directly
-        console.log('OpenID already available, fetching bookings.');
+    console.log('MyBookings page shown. Checking for OpenID...');
+    this.setData({ isLoading: true, myBookings: [], error: null }); // Reset on show
+
+    // Function to attempt fetching bookings once OpenID is confirmed
+    const attemptFetchBookings = () => {
+      if (app.globalData.openid) {
+        console.log('OpenID is now available:', app.globalData.openid, 'Fetching bookings.');
         this.fetchMyBookings();
       } else {
-        // If openid is not yet available, set up a callback
-        // The callback will be executed by app.js when login completes
-        console.log('OpenID not ready, setting callback.');
-        app.openidReadyCallback = openid => { // Use arrow function to maintain 'this' context
-            console.log('OpenID ready callback executed in MyBookings.');
-            if (openid) {
-              this.fetchMyBookings();
-            } else {
-              // Handle case where login might ultimately fail
-               this.setData({ error: '用户登录失败', myBookings: []});
-               wx.showToast({ title: '用户登录失败', icon: 'none' });
-            }
-        }
-        // Optionally, still show a loading state while waiting for login?
-        // this.setData({ isLoading: true });
+        // This case should ideally be rare if checkOpenIDReady handles it
+        console.error('OpenID still not available after checks.');
+        this.setData({ error: '用户登录状态获取失败', isLoading: false });
+        wx.showToast({ title: '登录状态异常', icon: 'none' });
       }
+    };
+
+    // Check if OpenID is ready, if not, poll for a short period
+    if (app.globalData.openid) {
+      console.log('OpenID immediately available in onShow.');
+      attemptFetchBookings();
+    } else {
+      console.log('OpenID not immediately available. Polling...');
+      let attempts = 0;
+      const maxAttempts = 10; // Try for 5 seconds (10 * 500ms)
+      const intervalId = setInterval(() => {
+        attempts++;
+        if (app.globalData.openid) {
+          clearInterval(intervalId);
+          attemptFetchBookings();
+        } else if (attempts >= maxAttempts) {
+          clearInterval(intervalId);
+          console.error('OpenID not available after polling.');
+          this.setData({ error: '用户登录超时', isLoading: false });
+          wx.showToast({ title: '登录超时', icon: 'none' });
+        } else {
+          console.log(`Polling for OpenID, attempt ${attempts}`);
+        }
+      }, 500); // Check every 500ms
+    }
   },
 
   /**
    * Fetch user's upcoming confirmed bookings
    */
   fetchMyBookings: function() {
-    this.setData({ isLoading: true, error: null });
-    wx.showLoading({ title: '加载中...' });
+    // MODIFIED: Ensure isLoading is set to true at the start if not already
+    if (!this.data.isLoading) {
+        this.setData({ isLoading: true, error: null });
+    }
+    // wx.showLoading({ title: '加载中...' }); // This is handled by isLoading state or can be added if preferred
 
-    // Note: The backend currently uses a hardcoded userId ('test_user_openid_123')
-    //       in the getMyUpcomingBookings controller.
-    //       So this API call will fetch bookings for that test user,
-    //       regardless of the actual app.globalData.openid value for now.
-    //       This needs to be fixed when proper backend auth is implemented.
-    const apiUrl = 'http://localhost:3001/api/bookings/mine/upcoming';
-
-    wx.request({
-      url: apiUrl,
-      method: 'GET',
-      // TODO: Send actual authentication (e.g., JWT token) in header later
-      // header: { 'Authorization': 'Bearer ' + token }
-      success: (res) => {
-        if (res.statusCode === 200 && Array.isArray(res.data)) {
-          // Format times for display
-          const formattedBookings = res.data.map(booking => ({
-            ...booking,
-            displayStart: formatBookingTime(booking.startTime),
-            displayEnd: formatBookingTime(booking.endTime)
-          }));
-          this.setData({ myBookings: formattedBookings, isLoading: false });
-        } else {
-          console.error("Failed to fetch bookings:", res);
-          this.setData({ isLoading: false, error: '无法加载预约列表' });
-          wx.showToast({ title: '加载失败', icon: 'error' });
-        }
-      },
-      fail: (err) => {
-        console.error("Error fetching bookings:", err);
-        this.setData({ isLoading: false, error: '网络错误' });
-        wx.showToast({ title: '网络错误', icon: 'none' });
-      },
-      complete: () => {
+    // The request utility should handle adding the base URL and Authorization header.
+    // The backend controller for '/api/bookings/mine/upcoming'
+    // MUST use the authenticated user's ID (e.g., req.user.openid)
+    // to fetch the correct bookings.
+    request({
+      url: '/api/bookings/mine/upcoming', // Relative path, base URL is in request.js
+      method: 'GET'
+      // requiresAuth defaults to true in the request utility, so token will be sent
+    })
+    .then(apiResponseBookings => { // apiResponseBookings is the data part from the successful response
+      console.log('Fetched my bookings:', apiResponseBookings);
+      if (Array.isArray(apiResponseBookings)) {
+        const formattedBookings = apiResponseBookings.map(booking => ({
+          ...booking,
+          // Ensure 'bookingId' from API response or '_id' from DB is consistently used.
+          // If API returns `_id` (common for MongoDB), use booking._id.
+          // If API returns `bookingId` (as seen in previous logs), use booking.bookingId.
+          // The key in WXML and data-attribute should match this.
+          id: booking.bookingId || booking._id, // Use 'id' as a consistent property for the template
+          displayStart: formatBookingTime(booking.startTime),
+          displayEnd: formatBookingTime(booking.endTime)
+        }));
+        this.setData({ myBookings: formattedBookings, isLoading: false });
+      } else {
+        // This case might occur if the backend returns an object instead of an array on success,
+        // or if the data isn't in the expected format.
+        console.error("Failed to fetch bookings or invalid data format. Expected array, got:", apiResponseBookings);
+        this.setData({ isLoading: false, error: '无法加载预约列表', myBookings: [] });
+        wx.showToast({ title: '加载失败: 格式错误', icon: 'error' });
+      }
+    })
+    .catch(err => {
+      console.error("Error fetching bookings:", err);
+      // The request utility should ideally return an error object with a 'message' property.
+      // It might also handle showing a generic toast for network errors.
+      this.setData({
+        isLoading: false,
+        error: err.message || '网络错误，无法加载预约',
+        myBookings: []
+      });
+      // Toast can be redundant if request utility already shows one for major failures.
+      // wx.showToast({ title: err.message || '网络错误', icon: 'none' });
+    })
+    .finally(() => {
+      // MODIFIED: isLoading is set to false in .then() and .catch()
+      // wx.hideLoading(); // Only use if wx.showLoading was called
+      if (wx.hideLoading) { // Check if function exists before calling
         wx.hideLoading();
       }
     });
@@ -112,28 +148,23 @@ Page({
    * Handles cancellation button tap
    */
 handleCancelBooking: function(event) {
-    const { bookingId } = event.currentTarget.dataset; // Get bookingId from data-* attribute
+    // Use 'id' which we defined in fetchMyBookings map.
+    // This 'id' should correspond to what the backend expects (e.g., MongoDB _id or a numeric bookingId)
+    const { id: bookingIdToCancel } = event.currentTarget.dataset;
 
-    if (bookingId === undefined) {
-      console.error("Cancel button tapped without bookingId");
+    if (bookingIdToCancel === undefined) {
+      console.error("Cancel button tapped without bookingId (expected 'data-id')");
+      wx.showToast({ title: '无法取消：ID缺失', icon: 'none' });
       return;
     }
 
-    const bookingIdNum = parseInt(bookingId, 10);
-    if (isNaN(bookingIdNum)) {
-        console.error("Invalid bookingId passed to cancel handler:", bookingId);
-        return;
-    }
-
-    // Confirm with the user first
     wx.showModal({
       title: '取消预约',
-      content: '您确定要取消这个预约吗？', // "Are you sure you want to cancel this booking?"
+      content: '您确定要取消这个预约吗？',
       success: (res) => {
         if (res.confirm) {
-          console.log('User confirmed cancellation for booking ID:', bookingIdNum);
-          // Proceed with calling the cancellation API
-          this.callCancelBookingApi(bookingIdNum);
+          console.log('User confirmed cancellation for booking ID:', bookingIdToCancel);
+          this.callCancelBookingApi(bookingIdToCancel);
         } else if (res.cancel) {
           console.log('User cancelled the cancellation action');
         }
@@ -146,40 +177,27 @@ handleCancelBooking: function(event) {
    */
   callCancelBookingApi: function(bookingId) {
     wx.showLoading({ title: '正在取消...' });
-    this.setData({ isLoading: true }); // Optional: use page loading state
+    this.setData({ isLoading: true }); // Optional: use page loading state for more feedback
 
-    // Construct the URL with the booking ID
-    // Replace with your actual backend URL if different
-    const apiUrl = `http://localhost:3001/api/bookings/${bookingId}`;
-
-    wx.request({
-      url: apiUrl,
-      method: 'DELETE',
-      // TODO: Add Authorization header with user's token/session info here
-      // header: { 'Authorization': 'Bearer ' + token }
-      success: (res) => {
-        console.log('Cancel API response:', res);
-        if (res.statusCode === 200) { // Backend returns 200 OK on successful delete
-          wx.showToast({ title: '取消成功', icon: 'success' });
-          // Refresh the list of bookings after cancellation
-          this.fetchMyBookings();
-        } else {
-          // Handle errors like 403 Forbidden, 404 Not Found, 500 Server Error
-          const errorMsg = res.data && res.data.error ? res.data.error : '请稍后重试';
-          console.error('Cancellation failed:', res);
-          wx.showToast({ title: `取消失败: ${errorMsg}`, icon: 'none', duration: 2500 });
-          this.setData({ isLoading: false }); // Reset loading state on error
-        }
-      },
-      fail: (err) => {
-        console.error('wx.request failed (cancel):', err);
-        wx.showToast({ title: '网络错误，取消失败', icon: 'none' });
-        this.setData({ isLoading: false });
-      },
-      complete: () => {
-        wx.hideLoading();
-        // Ensure loading state is reset if it was set
-        // this.setData({ isLoading: false });
+    request({
+      url: `/api/bookings/${bookingId}`, // Relative path; bookingId is part of the path
+      method: 'DELETE'
+    })
+    .then(response => { 
+      console.log('Cancel API response:', response);
+      wx.showToast({ title: '取消成功', icon: 'success' });
+      this.fetchMyBookings(); 
+    })
+    .catch(err => {
+      console.error('Cancellation failed:', err);
+      this.setData({ isLoading: false }); 
+      const errorMsg = (err && err.data && err.data.error) || err.message || '请稍后重试';
+      wx.showToast({ title: `取消失败: ${errorMsg}`, icon: 'none', duration: 2500 });
+    })
+    .finally(() => {
+      wx.hideLoading();
+      if(this.data.isLoading) {
+           this.setData({ isLoading: false });
       }
     });
   },
@@ -188,10 +206,18 @@ handleCancelBooking: function(event) {
    * Optional: Pull-down refresh
    */
   onPullDownRefresh: function () {
-    this.fetchMyBookings();
-    // Remember to call wx.stopPullDownRefresh() in the complete callback of wx.request
-    // inside fetchMyBookings if you implement this fully.
-    // For now, just stop it immediately
-    wx.stopPullDownRefresh();
+    if (this.data.isLoading) return; 
+    console.log("Pull down to refresh triggered.");
+    // MODIFIED: Ensure fetchMyBookings is called correctly and isLoading state is managed
+    this.setData({ isLoading: true, error: null }); // Set loading state before fetching
+    this.fetchMyBookings()
+        .finally(() => { // Assuming fetchMyBookings returns a promise
+            wx.stopPullDownRefresh();
+        });
+    // If fetchMyBookings doesn't return a promise or if you prefer simpler logic:
+    // this.fetchMyBookings();
+    // setTimeout(() => { // This timeout might be removed if .finally handles it well
+    //     wx.stopPullDownRefresh();
+    // }, 1000);
   }
 })

@@ -1,6 +1,7 @@
 const {
     // ... other functions like parseISO, isBefore, isAfter ...
     formatISO, // <-- Make sure this is included
+    startOfDay, // <-- ADDED: For getting the start of today
   } = require('date-fns');
 
 // backend/controllers/booking.controller.js
@@ -121,21 +122,21 @@ const createBooking = async (req, res) => {
 const cancelBooking = async (req, res) => {
     const { bookingId } = req.params; // Get bookingId from URL parameter
     const bookingIdNum = parseInt(bookingId, 10);
-  
+
     // TODO: Implement authentication - Get requesterUserId and requesterRole from verified session/token
     // For testing now, let's assume a requester ID and role.
     const requesterUserId = 'test_user_openid_123'; // Example student user
     // const requesterRole = 'student'; // Or 'coach'
     // We'll infer role based on ID match for now for simplicity, assuming only student or coach can cancel.
     // In a real app, the role would come from the authenticated session.
-  
-  
+
+
     // --- Validate Input ---
     if (isNaN(bookingIdNum)) {
       return res.status(400).json({ error: 'Invalid bookingId format.' });
     }
     // --- End Validation ---
-  
+
     try {
       // --- Database Operations ---
       // Use serialize to ensure sequential execution
@@ -150,29 +151,29 @@ const cancelBooking = async (req, res) => {
           if (!booking) {
             return res.status(404).json({ error: `Booking with ID ${bookingIdNum} not found.` });
           }
-  
+
           // Step 2: Check status and permissions
           if (booking.status.startsWith('cancelled_')) {
             return res.status(200).json({ message: 'Booking already cancelled.' }); // Or 400 Bad Request? Let's use 200 OK.
           }
-  
+
           // Basic Permission Check (replace with real auth later)
           // Assuming only the user who booked or the coach (hardcoded ID for now) can cancel
           const coachId = 'COACH_001'; // Assuming this is the coach's ID used elsewhere
           const isAllowed = (requesterUserId === booking.userId || requesterUserId === coachId);
-  
+
           if (!isAllowed) {
             // In a real app check role: requesterRole === 'coach' || requesterUserId === booking.userId
              console.log(`User ${requesterUserId} attempted to cancel booking ${bookingIdNum} owned by ${booking.userId}`);
              return res.status(403).json({ error: 'Forbidden - You do not have permission to cancel this booking.' });
           }
-  
+
           // Determine new status based on who is cancelling (simplified check)
           const newStatus = (requesterUserId === coachId) ? 'cancelled_by_coach' : 'cancelled_by_user';
-  
+
           // Use a transaction for the two updates
           db.run('BEGIN TRANSACTION;');
-  
+
           // Step 3: Update the booking status
           const updateBookingSql = "UPDATE Bookings SET status = ? WHERE bookingId = ?";
           db.run(updateBookingSql, [newStatus, bookingIdNum], function(updateBookingErr) {
@@ -187,9 +188,9 @@ const cancelBooking = async (req, res) => {
                db.run('ROLLBACK;');
                return res.status(500).json({ error: 'Failed to update booking status.' });
             }
-  
+
             console.log(`Booking ${bookingIdNum} status updated to ${newStatus}.`);
-  
+
             // Step 4: Update the corresponding slot status back to 'available'
             const updateSlotSql = `
               UPDATE AvailabilitySlots
@@ -205,22 +206,22 @@ const cancelBooking = async (req, res) => {
                 db.run('ROLLBACK;');
                 return res.status(500).json({ error: 'Database error updating slot status.' });
               }
-  
+
               console.log(`Slot ${booking.slotId} status updated to available.`);
-  
+
               // If both updates succeed, commit
               db.run('COMMIT;');
-  
+
               // TODO: Trigger cancellation notification to coach and student
-  
+
               res.status(200).json({ message: 'Booking cancelled successfully.' });
-  
+
             }); // End update slot db.run
           }); // End update booking db.run
         }); // End find booking db.get
       }); // End db.serialize
       // --- End Database Operations ---
-  
+
     } catch (error) {
       // Catch synchronous errors if any occurred before DB operations
       console.error(`Error in cancelBooking controller for booking ${bookingIdNum}:`, error.message);
@@ -232,46 +233,45 @@ const cancelBooking = async (req, res) => {
     }
   };
 
-// Controller function for a student to get their own upcoming bookings
-const getMyUpcomingBookings = async (req, res) => {
-    // TODO: Implement authentication - Get requesterUserId from verified session/token
-    // For testing now, let's assume the ID of the user we manually added
-    const requesterUserId = 'test_user_openid_123';
-  
-    if (!requesterUserId) {
-      // This check will be more robust with real authentication
-      return res.status(401).json({ error: 'User identification missing.' });
+// START OF MODIFIED SECTION: getMyUpcomingBookings
+const getMyUpcomingBookings = (req, res) => { // Changed from async to sync as per example
+    const studentUserId = req.user.openid; // Get the authenticated user's OpenID from the token
+
+    if (!studentUserId) {
+        // This case should ideally be caught by verifyToken middleware if a token is required
+        return res.status(401).json({ error: "User not authenticated." });
     }
-  
-    try {
-      const nowISO = formatISO(new Date()); // Get current time in ISO format for comparison
-  
-      // --- Database Query ---
-      const sql = `
-        SELECT bookingId, slotId, startTime, endTime, status
-        FROM Bookings
-        WHERE userId = ?
-          AND status = 'confirmed'
-          AND startTime >= ?  -- Only bookings starting now or in the future
+
+    const currentDate = formatISO(startOfDay(new Date())); // Get today's date at start of day
+
+    // --- Database Query ---
+    const sql = `
+        SELECT * FROM Bookings 
+        WHERE userId = ? 
+          AND status = 'confirmed' 
+          AND startTime >= ? 
         ORDER BY startTime ASC
-      `;
-  
-      console.log(`Querying upcoming confirmed bookings for user ${requesterUserId} from ${nowISO}...`);
-  
-      db.all(sql, [requesterUserId, nowISO], (err, rows) => {
+    `;
+    // Parameters for the SQL query
+    const params = [studentUserId, currentDate];
+
+    console.log(`Querying upcoming confirmed bookings for user ${studentUserId} from ${currentDate}...`); // Updated log
+
+    db.all(sql, params, (err, rows) => {
         if (err) {
-          console.error(`Database error fetching upcoming bookings for user ${requesterUserId}:`, err.message);
-          return res.status(500).json({ error: 'Database error fetching bookings.' });
+            console.error("Database error fetching user's upcoming bookings:", err.message); // Updated error log
+            return res.status(500).json({ error: "Failed to retrieve your bookings." }); // Updated error response
         }
-        res.status(200).json(rows || []); // Return found bookings or empty array
-      });
-      // --- End Database Query ---
-  
-    } catch (error) {
-      console.error(`Error in getMyUpcomingBookings controller for user ${requesterUserId}:`, error.message);
-      res.status(500).json({ error: 'Failed to retrieve upcoming bookings.' });
-    }
-  };
+        console.log(`Fetched ${rows.length} upcoming bookings for user ${studentUserId}`); // New log message
+        res.json(rows || []); // Return found bookings or empty array, changed from res.status(200) for consistency with example
+    });
+    // --- End Database Query ---
+
+    // Removed the try-catch block as db.all handles errors with its callback,
+    // and the primary source of studentUserId is now req.user.openid which is checked upfront.
+    // Synchronous errors before db.all are less likely in this simplified structure.
+};
+// END OF MODIFIED SECTION: getMyUpcomingBookings
 
 module.exports = {
   createBooking,
