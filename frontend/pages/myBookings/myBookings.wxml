@@ -25,7 +25,7 @@
           size="mini"
           type="warn"
           bindtap="handleCancelBooking"
-          data-booking-id="{{item.bookingId}}"
+          data-bookingid="{{item.bookingId}}"
         >
           取消预约
         </button>

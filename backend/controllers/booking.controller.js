@@ -119,119 +119,105 @@ const createBooking = async (req, res) => {
 };
 
 // Controller function to cancel a booking
+// The following cancelBooking function aligns with the LLM's specified "Modified cancelBooking Controller Function".
 const cancelBooking = async (req, res) => {
-    const { bookingId } = req.params; // Get bookingId from URL parameter
+    const { bookingId } = req.params;
     const bookingIdNum = parseInt(bookingId, 10);
 
-    // TODO: Implement authentication - Get requesterUserId and requesterRole from verified session/token
-    // For testing now, let's assume a requester ID and role.
-    const requesterUserId = 'test_user_openid_123'; // Example student user
-    // const requesterRole = 'student'; // Or 'coach'
-    // We'll infer role based on ID match for now for simplicity, assuming only student or coach can cancel.
-    // In a real app, the role would come from the authenticated session.
-
+    // --- Get authenticated user's OpenID from the token (populated by verifyToken middleware) ---
+    if (!req.user || !req.user.openid) {
+        // This should ideally not happen if verifyToken middleware is applied to the route
+        console.error('[CancelBooking] Auth error: req.user or req.user.openid is missing.');
+        return res.status(401).json({ error: 'Authentication failed. User not identified.' });
+    }
+    const authenticatedUserId = req.user.openid;
+    // --- End User Authentication ---
 
     // --- Validate Input ---
     if (isNaN(bookingIdNum)) {
-      return res.status(400).json({ error: 'Invalid bookingId format.' });
+        return res.status(400).json({ error: 'Invalid bookingId format.' });
     }
     // --- End Validation ---
 
     try {
-      // --- Database Operations ---
-      // Use serialize to ensure sequential execution
-      db.serialize(() => {
-        // Step 1: Find the booking to get its details (owner, slot, status)
-        const findBookingSql = "SELECT userId, slotId, status FROM Bookings WHERE bookingId = ?";
-        db.get(findBookingSql, [bookingIdNum], (findErr, booking) => {
-          if (findErr) {
-            console.error(`Error finding booking ${bookingIdNum}:`, findErr.message);
-            return res.status(500).json({ error: 'Database error finding booking.' });
-          }
-          if (!booking) {
-            return res.status(404).json({ error: `Booking with ID ${bookingIdNum} not found.` });
-          }
+        db.serialize(() => {
+            const findBookingSql = "SELECT userId, slotId, status, coachId FROM Bookings WHERE bookingId = ?";
+            // Also fetching coachId from Booking, assuming it's stored there and reflects the coach for that specific booking.
+            // If not, you might need to get the system's designated coach ID differently (e.g., process.env.COACH_OPENID)
 
-          // Step 2: Check status and permissions
-          if (booking.status.startsWith('cancelled_')) {
-            return res.status(200).json({ message: 'Booking already cancelled.' }); // Or 400 Bad Request? Let's use 200 OK.
-          }
+            db.get(findBookingSql, [bookingIdNum], (findErr, booking) => {
+                if (findErr) {
+                    console.error(`[CancelBooking] Error finding booking ${bookingIdNum}:`, findErr.message);
+                    return res.status(500).json({ error: 'Database error finding booking.' });
+                }
+                if (!booking) {
+                    return res.status(404).json({ error: `Booking with ID ${bookingIdNum} not found.` });
+                }
 
-          // Basic Permission Check (replace with real auth later)
-          // Assuming only the user who booked or the coach (hardcoded ID for now) can cancel
-          const coachId = 'COACH_001'; // Assuming this is the coach's ID used elsewhere
-          const isAllowed = (requesterUserId === booking.userId || requesterUserId === coachId);
+                if (booking.status.startsWith('cancelled_')) {
+                    return res.status(200).json({ message: 'Booking already cancelled.' });
+                }
 
-          if (!isAllowed) {
-            // In a real app check role: requesterRole === 'coach' || requesterUserId === booking.userId
-             console.log(`User ${requesterUserId} attempted to cancel booking ${bookingIdNum} owned by ${booking.userId}`);
-             return res.status(403).json({ error: 'Forbidden - You do not have permission to cancel this booking.' });
-          }
+                // --- Permission Check ---
+                // The authenticated user must be the one who made the booking (booking.userId)
+                // OR the authenticated user must be THE system coach (process.env.COACH_OPENID)
+                const systemCoachOpenId = process.env.COACH_OPENID; // Get the system's coach OpenID
 
-          // Determine new status based on who is cancelling (simplified check)
-          const newStatus = (requesterUserId === coachId) ? 'cancelled_by_coach' : 'cancelled_by_user';
+                const isOwner = (authenticatedUserId === booking.userId);
+                const isCoach = (authenticatedUserId === systemCoachOpenId);
 
-          // Use a transaction for the two updates
-          db.run('BEGIN TRANSACTION;');
+                if (!isOwner && !isCoach) { // Only owner or the system coach can cancel
+                    console.log(`[CancelBooking] Forbidden: User ${authenticatedUserId} attempted to cancel booking ${bookingIdNum} owned by ${booking.userId}. Not coach either.`);
+                    return res.status(403).json({ error: 'Forbidden - You do not have permission to cancel this booking.' });
+                }
+                // --- End Permission Check ---
 
-          // Step 3: Update the booking status
-          const updateBookingSql = "UPDATE Bookings SET status = ? WHERE bookingId = ?";
-          db.run(updateBookingSql, [newStatus, bookingIdNum], function(updateBookingErr) {
-            if (updateBookingErr) {
-              console.error(`Error updating booking status for ${bookingIdNum}:`, updateBookingErr.message);
-              db.run('ROLLBACK;');
-              return res.status(500).json({ error: 'Database error cancelling booking.' });
-            }
-            if (this.changes === 0) {
-               // Should not happen if we found the booking, but good practice
-               console.error(`Failed to update booking status for ${bookingIdNum} (no rows affected).`);
-               db.run('ROLLBACK;');
-               return res.status(500).json({ error: 'Failed to update booking status.' });
-            }
+                const newStatus = isCoach ? 'cancelled_by_coach' : 'cancelled_by_user';
 
-            console.log(`Booking ${bookingIdNum} status updated to ${newStatus}.`);
+                db.run('BEGIN TRANSACTION;');
 
-            // Step 4: Update the corresponding slot status back to 'available'
-            const updateSlotSql = `
-              UPDATE AvailabilitySlots
-              SET status = 'available', userId = NULL, bookingId = NULL
-              WHERE slotId = ?
-            `;
-            db.run(updateSlotSql, [booking.slotId], function(updateSlotErr) {
-              if (updateSlotErr) {
-                console.error(`Error updating slot status for slot ${booking.slotId}:`, updateSlotErr.message);
-                // Critical decision: Booking is cancelled, but slot not freed. Rollback?
-                // Design doc says atomicity not critical, let's commit booking cancel but log slot error.
-                // For consistency, maybe rollback is better? Let's rollback.
-                db.run('ROLLBACK;');
-                return res.status(500).json({ error: 'Database error updating slot status.' });
-              }
+                const updateBookingSql = "UPDATE Bookings SET status = ? WHERE bookingId = ?";
+                db.run(updateBookingSql, [newStatus, bookingIdNum], function(updateBookingErr) {
+                    if (updateBookingErr) {
+                        console.error(`[CancelBooking] Error updating booking status for ${bookingIdNum}:`, updateBookingErr.message);
+                        db.run('ROLLBACK;');
+                        return res.status(500).json({ error: 'Database error cancelling booking.' });
+                    }
+                    if (this.changes === 0) {
+                        console.error(`[CancelBooking] Failed to update booking status for ${bookingIdNum} (no rows affected).`);
+                        db.run('ROLLBACK;');
+                        return res.status(500).json({ error: 'Failed to update booking status.' });
+                    }
+                    console.log(`[CancelBooking] Booking ${bookingIdNum} status updated to ${newStatus}.`);
 
-              console.log(`Slot ${booking.slotId} status updated to available.`);
-
-              // If both updates succeed, commit
-              db.run('COMMIT;');
-
-              // TODO: Trigger cancellation notification to coach and student
-
-              res.status(200).json({ message: 'Booking cancelled successfully.' });
-
-            }); // End update slot db.run
-          }); // End update booking db.run
-        }); // End find booking db.get
-      }); // End db.serialize
-      // --- End Database Operations ---
-
+                    const updateSlotSql = `
+                        UPDATE AvailabilitySlots
+                        SET status = 'available', userId = NULL, bookingId = NULL
+                        WHERE slotId = ?
+                    `;
+                    db.run(updateSlotSql, [booking.slotId], function(updateSlotErr) {
+                        if (updateSlotErr) {
+                            console.error(`[CancelBooking] Error updating slot status for slot ${booking.slotId}:`, updateSlotErr.message);
+                            db.run('ROLLBACK;');
+                            return res.status(500).json({ error: 'Database error updating slot status.' });
+                        }
+                        console.log(`[CancelBooking] Slot ${booking.slotId} status updated to available.`);
+                        db.run('COMMIT;');
+                        // TODO: Trigger notification
+                        res.status(200).json({ message: 'Booking cancelled successfully.' });
+                    });
+                });
+            });
+        });
     } catch (error) {
-      // Catch synchronous errors if any occurred before DB operations
-      console.error(`Error in cancelBooking controller for booking ${bookingIdNum}:`, error.message);
-      // Attempt rollback just in case a transaction started but failed synchronously
-      db.run('ROLLBACK;', (rbError) => {
-           if (rbError) console.error("Rollback error in catch block:", rbError.message);
-      });
-      res.status(500).json({ error: 'Failed to cancel booking.' });
+        console.error(`[CancelBooking] Error in cancelBooking controller for booking ${bookingIdNum}:`, error.message);
+        db.run('ROLLBACK;', (rbError) => {
+            if (rbError) console.error("[CancelBooking] Rollback error in catch block:", rbError.message);
+        });
+        res.status(500).json({ error: 'Failed to cancel booking.' });
     }
-  };
+};
+
 
 // START OF MODIFIED SECTION: getMyUpcomingBookings
 const getMyUpcomingBookings = (req, res) => { // Changed from async to sync as per example

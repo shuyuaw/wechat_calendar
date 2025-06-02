@@ -147,14 +147,12 @@ Page({
 /**
    * Handles cancellation button tap
    */
-handleCancelBooking: function(event) {
-    // Use 'id' which we defined in fetchMyBookings map.
-    // This 'id' should correspond to what the backend expects (e.g., MongoDB _id or a numeric bookingId)
-    const { id: bookingIdToCancel } = event.currentTarget.dataset;
+  handleCancelBooking: function(event) {
+    const { bookingid } = event.currentTarget.dataset; // Use all lowercase
+    // const bookingId = event.currentTarget.dataset.bookingid; // Alternative way
 
-    if (bookingIdToCancel === undefined) {
-      console.error("Cancel button tapped without bookingId (expected 'data-id')");
-      wx.showToast({ title: '无法取消：ID缺失', icon: 'none' });
+    if (bookingid === undefined) {
+      console.error("Cancel button tapped, bookingid not found in dataset:", event.currentTarget.dataset);
       return;
     }
 
@@ -163,8 +161,8 @@ handleCancelBooking: function(event) {
       content: '您确定要取消这个预约吗？',
       success: (res) => {
         if (res.confirm) {
-          console.log('User confirmed cancellation for booking ID:', bookingIdToCancel);
-          this.callCancelBookingApi(bookingIdToCancel);
+          console.log('User confirmed cancellation for booking ID:', bookingid);
+          this.callCancelBookingApi(bookingid);
         } else if (res.cancel) {
           console.log('User cancelled the cancellation action');
         }
