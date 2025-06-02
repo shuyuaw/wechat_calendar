@@ -2,10 +2,10 @@ const {
     // ... other functions like parseISO, isBefore, isAfter ...
     formatISO, // <-- Make sure this is included
     startOfDay, // <-- ADDED: For getting the start of today
+    format,      // <-- ADDED: For formatting dates for notifications
   } = require('date-fns');
-
-// backend/controllers/booking.controller.js
 const db = require('../database.js');
+const { sendSubscribeMessage } = require('../utils/wechat.js'); // <-- ADDED: For sending WeChat notifications
 
 // Controller function to create a new booking
 const createBooking = async (req, res) => {
@@ -28,8 +28,6 @@ const createBooking = async (req, res) => {
   // --- Database Transaction ---
   db.serialize(() => { // Use serialize to ensure sequential execution within this connection
     db.run('BEGIN TRANSACTION;');
-
-    let bookingSuccessful = false; // Flag to track outcome
 
     // Step 1: Attempt to atomically update the slot status from 'available' to 'booked'
     const updateSlotSql = `
@@ -85,9 +83,6 @@ const createBooking = async (req, res) => {
           db.run(linkBookingSql, [newBookingId, slotIdNum], function(linkErr) {
              if (linkErr) {
                 console.error(`Error linking bookingId ${newBookingId} to slotId ${slotIdNum}:`, linkErr.message);
-                // This is problematic: booking exists but slot isn't linked.
-                // Should still commit the booking but log the error.
-                // Or potentially try to rollback? Rollback is safer data-wise.
                 db.run('ROLLBACK;');
                 return res.status(500).json({ error: 'Database error linking booking to slot.' });
              }
@@ -95,21 +90,84 @@ const createBooking = async (req, res) => {
              console.log(`Slot ${slotIdNum} successfully linked to booking ${newBookingId}.`);
 
              // If all steps succeeded:
-             bookingSuccessful = true;
-             db.run('COMMIT;'); // Commit the transaction
+             db.run('COMMIT;', (commitErr) => { // Commit the transaction
+                if (commitErr) {
+                    console.error("Error committing transaction:", commitErr.message);
+                    // ROLLBACK might not be possible or effective if COMMIT failed.
+                    // Critical error, requires manual check or advanced handling.
+                    return res.status(500).json({ error: 'Database error committing booking.' });
+                }
 
-             // TODO: Trigger notification to coach and student about the new booking
+                // --- START: WeChat Notification Logic ---
+                // Note: Using slotDetails for startTime and endTime as newBooking object is not defined here.
+                // Assuming slotDetails contains the correct startTime and endTime for the newly created booking.
+                const studentOpenId = userId; // userId from req.body is the student's OpenID
+                const coachOpenId = slotDetails.coachId || process.env.COACH_OPENID; // Coach for the booking
+
+                const bookingStartTime = new Date(slotDetails.startTime); // Using slotDetails.startTime
+                const bookingEndTime = new Date(slotDetails.endTime); // Using slotDetails.endTime
+
+                // === MODIFICATION START ===
+                // Old longer format:
+                // const formattedTimeSlot = `${format(bookingStartTime, 'yyyy年MM月dd日 HH:mm')} - ${format(bookingEndTime, 'HH:mm')}`;
+                // New shorter format:
+                const formattedTimeSlot = `${format(bookingStartTime, 'MM月dd日 HH:mm')}-${format(bookingEndTime, 'HH:mm')}`;
+                // Example: "06月03日 11:00-12:00"
+                // === MODIFICATION END ===
+
+                const bookingConfirmationTemplateId = process.env.WECHAT_BOOKING_CONFIRM_TEMPLATE_ID || 'Bai8NNhUQlXdOJaMrMIUv5bblC_W7wb9w3G9c-Ylip0'; // Example: Use env var for template ID
+
+                // Data for the student notification
+                const studentMessageData = {
+                    "thing1": { "value": "职业发展辅导预约" }, // Ensure "职业发展辅导预约" is <= 20 chars if thing1 is 'thing'
+                    "thing13": { "value": formattedTimeSlot }   // Booking Time Slot
+                };
+
+                // Data for the coach notification
+                const coachMessageData = {
+                    "thing1": { "value": "新的辅导预约" }, // Ensure "新的辅导预约" is <= 20 chars if thing1 is 'thing'
+                    "thing13": { "value": formattedTimeSlot }
+                };
+
+                // Send to student
+                sendSubscribeMessage({
+                    recipientOpenId: studentOpenId,
+                    templateId: bookingConfirmationTemplateId,
+                    dataPayload: studentMessageData,
+                    pageLink: 'pages/myBookings/myBookings' // Page student lands on
+                }).then(success => {
+                    if (success) console.log(`[Notification] Student (${studentOpenId}) notification initiated for booking ${newBookingId}.`);
+                    else console.error(`[Notification] Student (${studentOpenId}) notification failed to initiate for booking ${newBookingId}.`);
+                });
+
+                // Send to coach
+                if (coachOpenId) {
+                     sendSubscribeMessage({
+                        recipientOpenId: coachOpenId,
+                        templateId: bookingConfirmationTemplateId,
+                        dataPayload: coachMessageData,
+                        pageLink: 'pages/coachBookings/coachBookings' // Page coach lands on
+                    }).then(success => {
+                        if (success) console.log(`[Notification] Coach (${coachOpenId}) notification initiated for booking ${newBookingId}.`);
+                        else console.error(`[Notification] Coach (${coachOpenId}) notification failed to initiate for booking ${newBookingId}.`);
+                    });
+                } else {
+                    console.log(`[Notification] No coachId found for slot ${slotIdNum}, or no default coach OpenID configured. Coach notification skipped for booking ${newBookingId}.`);
+                }
+                // --- END: WeChat Notification Logic ---
 
              // Send success response
              res.status(201).json({
-               message: 'Booking created successfully.',
+                  message: 'Booking created successfully. Notifications initiated.',
                bookingId: newBookingId,
                slotId: slotIdNum,
                userId: userId,
+                  coachId: slotDetails.coachId, // Added coachId to response
                startTime: slotDetails.startTime,
                endTime: slotDetails.endTime,
                status: 'confirmed'
              });
+             }); // End COMMIT db.run
 
           }); // End link booking db.run
         }); // End insert booking db.run
@@ -141,9 +199,8 @@ const cancelBooking = async (req, res) => {
 
     try {
         db.serialize(() => {
-            const findBookingSql = "SELECT userId, slotId, status, coachId FROM Bookings WHERE bookingId = ?";
+            const findBookingSql = "SELECT userId, slotId, status, coachId, startTime, endTime FROM Bookings WHERE bookingId = ?"; // Added startTime, endTime for notification
             // Also fetching coachId from Booking, assuming it's stored there and reflects the coach for that specific booking.
-            // If not, you might need to get the system's designated coach ID differently (e.g., process.env.COACH_OPENID)
 
             db.get(findBookingSql, [bookingIdNum], (findErr, booking) => {
                 if (findErr) {
@@ -154,25 +211,30 @@ const cancelBooking = async (req, res) => {
                     return res.status(404).json({ error: `Booking with ID ${bookingIdNum} not found.` });
                 }
 
+                // Store details for notification before status changes
+                const originalBookingDetailsForNotification = { ...booking };
+
+
                 if (booking.status.startsWith('cancelled_')) {
+                    // If already cancelled, we might still want to ensure notifications were sent or resend if appropriate,
+                    // but for now, just return based on existing logic.
                     return res.status(200).json({ message: 'Booking already cancelled.' });
                 }
 
                 // --- Permission Check ---
-                // The authenticated user must be the one who made the booking (booking.userId)
-                // OR the authenticated user must be THE system coach (process.env.COACH_OPENID)
-                const systemCoachOpenId = process.env.COACH_OPENID; // Get the system's coach OpenID
-
+                const systemCoachOpenId = process.env.COACH_OPENID;
                 const isOwner = (authenticatedUserId === booking.userId);
-                const isCoach = (authenticatedUserId === systemCoachOpenId);
+                const isCoach = (authenticatedUserId === systemCoachOpenId || authenticatedUserId === booking.coachId); // Allow specific booking coach or system coach
 
-                if (!isOwner && !isCoach) { // Only owner or the system coach can cancel
-                    console.log(`[CancelBooking] Forbidden: User ${authenticatedUserId} attempted to cancel booking ${bookingIdNum} owned by ${booking.userId}. Not coach either.`);
+                if (!isOwner && !isCoach) {
+                    console.log(`[CancelBooking] Forbidden: User ${authenticatedUserId} attempted to cancel booking ${bookingIdNum} owned by ${booking.userId}. Not assigned or system coach.`);
                     return res.status(403).json({ error: 'Forbidden - You do not have permission to cancel this booking.' });
                 }
                 // --- End Permission Check ---
 
-                const newStatus = isCoach ? 'cancelled_by_coach' : 'cancelled_by_user';
+                const cancelledByWhom = authenticatedUserId === booking.userId ? "user" : "coach";
+                const newStatus = `cancelled_by_${cancelledByWhom}`;
+
 
                 db.run('BEGIN TRANSACTION;');
 
@@ -186,7 +248,9 @@ const cancelBooking = async (req, res) => {
                     if (this.changes === 0) {
                         console.error(`[CancelBooking] Failed to update booking status for ${bookingIdNum} (no rows affected).`);
                         db.run('ROLLBACK;');
-                        return res.status(500).json({ error: 'Failed to update booking status.' });
+                        // This could mean the booking was already in the target state, or another issue.
+                        // For now, treating as an error if we expected a change.
+                        return res.status(500).json({ error: 'Failed to update booking status (no change applied).' });
                     }
                     console.log(`[CancelBooking] Booking ${bookingIdNum} status updated to ${newStatus}.`);
 
@@ -202,19 +266,75 @@ const cancelBooking = async (req, res) => {
                             return res.status(500).json({ error: 'Database error updating slot status.' });
                         }
                         console.log(`[CancelBooking] Slot ${booking.slotId} status updated to available.`);
-                        db.run('COMMIT;');
-                        // TODO: Trigger notification
-                        res.status(200).json({ message: 'Booking cancelled successfully.' });
-                    });
-                });
-            });
-        });
+                        db.run('COMMIT;', (commitErr) => {
+                            if (commitErr) {
+                                console.error("[CancelBooking] Error committing transaction:", commitErr.message);
+                                return res.status(500).json({ error: 'Database error committing cancellation.' });
+                            }
+
+                            // --- START: WeChat Notification Logic for Cancellation ---
+                            const studentOpenIdForCancel = originalBookingDetailsForNotification.userId;
+                            const coachOpenIdForCancel = originalBookingDetailsForNotification.coachId || process.env.COACH_OPENID;
+
+                            const bookingStartTimeForCancel = new Date(originalBookingDetailsForNotification.startTime);
+                            const bookingEndTimeForCancel = new Date(originalBookingDetailsForNotification.endTime);
+                            const formattedTimeSlotForCancel = `${format(bookingStartTimeForCancel, 'yyyy年MM月dd日 HH:mm')} - ${format(bookingEndTimeForCancel, 'HH:mm')}`;
+                            
+                            // It's good practice to use different template IDs for different notifications
+                            const bookingCancellationTemplateId = process.env.WECHAT_BOOKING_CANCEL_TEMPLATE_ID || 'YOUR_CANCELLATION_TEMPLATE_ID_HERE';
+
+                            const cancelledByText = cancelledByWhom === "user" ? "用户" : "辅导员"; // "User" or "Coach"
+
+                            // Data for the student notification
+                            const studentCancellationMessageData = {
+                                "thing1": { "value": `您的辅导预约已取消 (by ${cancelledByText})` }, // Subject: "Your coaching appointment has been cancelled (by User/Coach)"
+                                "thing2": { "value": formattedTimeSlotForCancel }, // Time Slot
+                                // Add other relevant fields your template expects, e.g., reason if available
+                            };
+
+                            // Data for the coach notification
+                            const coachCancellationMessageData = {
+                                "thing1": { "value": `辅导预约已取消 (by ${cancelledByText})` }, // Subject: "Coaching appointment cancelled (by User/Coach)"
+                                "thing2": { "value": formattedTimeSlotForCancel }, // Time Slot
+                                // Add other relevant fields
+                            };
+
+                            // Send to student who owned the booking
+                            sendSubscribeMessage({
+                                recipientOpenId: studentOpenIdForCancel,
+                                templateId: bookingCancellationTemplateId,
+                                dataPayload: studentCancellationMessageData,
+                                pageLink: 'pages/myBookings/myBookings'
+                            }).then(success => {
+                                if (success) console.log(`[Notification] Cancellation Student (${studentOpenIdForCancel}) notification initiated for booking ${bookingIdNum}.`);
+                                else console.error(`[Notification] Cancellation Student (${studentOpenIdForCancel}) notification failed for booking ${bookingIdNum}.`);
+                            });
+
+                            // Send to coach if applicable and not the one who cancelled
+                            if (coachOpenIdForCancel) {
+                                 sendSubscribeMessage({
+                                    recipientOpenId: coachOpenIdForCancel,
+                                    templateId: bookingCancellationTemplateId,
+                                    dataPayload: coachCancellationMessageData,
+                                    pageLink: 'pages/coachBookings/coachBookings'
+                                }).then(success => {
+                                    if (success) console.log(`[Notification] Cancellation Coach (${coachOpenIdForCancel}) notification initiated for booking ${bookingIdNum}.`);
+                                    else console.error(`[Notification] Cancellation Coach (${coachOpenIdForCancel}) notification failed for booking ${bookingIdNum}.`);
+                                });
+                            }
+                            // --- END: WeChat Notification Logic for Cancellation ---
+
+                            res.status(200).json({ message: 'Booking cancelled successfully. Notifications initiated.' });
+                        }); // End COMMIT
+                    }); // End updateSlotSql
+                }); // End updateBookingSql
+            }); // End findBookingSql
+        }); // End db.serialize
     } catch (error) {
-        console.error(`[CancelBooking] Error in cancelBooking controller for booking ${bookingIdNum}:`, error.message);
-        db.run('ROLLBACK;', (rbError) => {
-            if (rbError) console.error("[CancelBooking] Rollback error in catch block:", rbError.message);
-        });
-        res.status(500).json({ error: 'Failed to cancel booking.' });
+        console.error(`[CancelBooking] Outer catch error for booking ${bookingIdNum}:`, error.message);
+        // Attempt rollback if transaction was started and an error occurred outside db callbacks
+        // This specific db.serialize structure might make this tricky, ensure db.run('ROLLBACK;') is called in error paths.
+        res.status(500).json({ error: 'Failed to cancel booking due to an unexpected error.' });
     }
 };
 
@@ -232,11 +352,14 @@ const getMyUpcomingBookings = (req, res) => { // Changed from async to sync as p
 
     // --- Database Query ---
     const sql = `
-        SELECT * FROM Bookings 
-        WHERE userId = ? 
-          AND status = 'confirmed' 
-          AND startTime >= ? 
-        ORDER BY startTime ASC
+        SELECT b.bookingId, b.coachId, b.slotId, b.startTime, b.endTime, b.status,
+               c.name as coachName, c.avatarUrl as coachAvatarUrl 
+        FROM Bookings b
+        LEFT JOIN Coaches c ON b.coachId = c.coachId 
+        WHERE b.userId = ? 
+          AND b.status = 'confirmed' 
+          AND b.startTime >= ? 
+        ORDER BY b.startTime ASC
     `;
     // Parameters for the SQL query
     const params = [studentUserId, currentDate];
@@ -252,10 +375,6 @@ const getMyUpcomingBookings = (req, res) => { // Changed from async to sync as p
         res.json(rows || []); // Return found bookings or empty array, changed from res.status(200) for consistency with example
     });
     // --- End Database Query ---
-
-    // Removed the try-catch block as db.all handles errors with its callback,
-    // and the primary source of studentUserId is now req.user.openid which is checked upfront.
-    // Synchronous errors before db.all are less likely in this simplified structure.
 };
 // END OF MODIFIED SECTION: getMyUpcomingBookings
 

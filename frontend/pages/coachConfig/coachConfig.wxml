@@ -12,7 +12,7 @@
         value="{{weeklyTemplateStr}}"
         bindinput="onTemplateChange"
         placeholder="加载的模板将显示在此处"
-      />
+        maxlength="-1" />
     </view>
 
     <button type="primary" bindtap="onSave" class="button-save">保存设置</button>

@@ -1,5 +1,8 @@
-<view class="container">
-  <view class="page-title">可预约时段 (本周)</view>
+<view class="container page-container-safe-index">
+  <view class="header-actions">
+    <view class="page-title">可预约时段</view>
+    <button size="mini" class="my-bookings-button" bindtap="goToMyBookings">我的预约</button>
+  </view>
 
   <view wx:if="{{isLoading}}" class="loading-message">
     <text>正在加载...</text>
@@ -24,12 +27,14 @@
         data-slot-id="{{item.slotId}}"
         data-start-time="{{item.startTime}}"
       >
-<view class="slot-datetime-details"> <text class="slot-date">{{item.displayDate}}</text> <text class="slot-time">{{item.displayTime}}</text>
-       </view>
-       <text class="slot-status {{item.status}}">
-           状态: {{item.status}}
-       </text>
-       <text class="book-indicator">点击预约</text>
+        <view class="slot-datetime-details">
+          <text class="slot-date">{{item.displayDate}}</text>
+          <text class="slot-time">{{item.displayTime}}</text>
+        </view>
+        <text class="slot-status {{item.status === 'available' ? 'status-available' : (item.status === 'booked' ? 'status-booked' : (item.status === 'confirmed' ? 'status-confirmed' : ''))}}">
+          状态: {{item.status === 'available' ? '可预约' : (item.status === 'booked' ? '已预约' : (item.status === 'confirmed' ? '已确认' : item.status))}}
+        </text>
+        <text class="book-indicator">点击预约</text>
       </view>
     </view>
   </block>

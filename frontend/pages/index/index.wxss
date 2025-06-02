@@ -1,16 +1,43 @@
 /* frontend/pages/index/index.wxss */
+
+/* ADDED: Styles for safe area and page container */
+.page-container-safe-index {
+  padding-top: env(safe-area-inset-top);
+  padding-top: calc(env(safe-area-inset-top) + 20rpx); /* Adjust as needed */
+  box-sizing: border-box;
+}
+
+/* MODIFIED: Container styles */
 .container {
-  padding: 20rpx;
-  font-family: sans-serif;
+  padding-left: 20rpx;
+  padding-right: 20rpx;
+  padding-bottom: 20rpx;
+  /* font-family: sans-serif; was removed from previous .container definition */
+  /* padding: 20rpx; was replaced by more specific paddings */
 }
 
+/* ADDED: Styles for header actions */
+.header-actions {
+  display: flex; /* Allows button to be side-by-side or managed easily */
+  justify-content: space-between; /* Pushes title left, button right */
+  align-items: center;
+  margin-bottom: 20rpx; /* Space below header */
+}
+
+/* MODIFIED: Page title styles */
 .page-title {
-  font-size: 40rpx;
+  font-size: 36rpx; /* Was 40rpx */
   font-weight: bold;
-  text-align: center;
-  margin-bottom: 30rpx;
+  /* text-align: center; was removed */
+  /* margin-bottom: 30rpx; was removed */
 }
 
+/* ADDED: Styles for my bookings button */
+.my-bookings-button {
+  /* Add specific styling if needed, e.g., margin-left */
+}
+
+/* Existing styles below */
 .loading-message,
 .error-message,
 .no-slots-message {
@@ -28,40 +55,39 @@
 }
 
 .slot-item {
-  display: flex; /* <-- Restore this */
-  justify-content: space-between; /* <-- Restore this */
-  align-items: center; /* <-- Restore this */
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
   padding: 25rpx 20rpx;
   border: 1px solid #eee;
   margin-bottom: 15rpx;
   border-radius: 8rpx;
   background-color: #f9f9f9;
-  cursor: pointer; /* Indicate it's clickable */
+  cursor: pointer; 
 }
 
 .slot-item:active {
-    background-color: #e0e0e0; /* Simple feedback on tap */
+    background-color: #e0e0e0; 
 }
 
 .slot-time {
   font-size: 28rpx;
-  flex-grow: 1; /* Allow time to take available space */
+  flex-grow: 1; 
   margin-right: 20rpx;
 }
 
 .slot-status {
   font-size: 24rpx;
-  color: green; /* Style available status */
+  color: green; 
   margin-right: 20rpx;
 }
 
 .book-indicator {
     font-size: 26rpx;
-    color: #007aff; /* Blue color for call to action */
+    color: #007aff; 
     font-weight: bold;
 }
 
-/* Add styles for 'booked' status if you fetch all slots, though /week only fetches available */
 .slot-status.booked {
   color: #888;
 }
