@@ -148,11 +148,9 @@ Page({
    * Handles cancellation button tap
    */
   handleCancelBooking: function(event) {
-    const { bookingid } = event.currentTarget.dataset; // Use all lowercase
-    // const bookingId = event.currentTarget.dataset.bookingid; // Alternative way
-
+    const { bookingid } = event.currentTarget.dataset;
     if (bookingid === undefined) {
-      console.error("Cancel button tapped, bookingid not found in dataset:", event.currentTarget.dataset);
+      console.error("Cancel button tapped without bookingid in dataset:", event.currentTarget.dataset);
       return;
     }
 
@@ -162,12 +160,34 @@ Page({
       success: (res) => {
         if (res.confirm) {
           console.log('User confirmed cancellation for booking ID:', bookingid);
+
+          // --- MODIFICATION START: ADD PERMISSION REQUEST FOR CANCELLATION ---
+          const tmplId_booking_cancellation = 'azP4v48iJE9jwlqYZuXJ7nHgXUSxUdd8ulUvzK19-sM';
+
+          wx.requestSubscribeMessage({
+            tmplIds: [tmplId_booking_cancellation],
+            success: (subscribeRes) => {
+              console.log('wx.requestSubscribeMessage success (for cancellation):', subscribeRes);
+              if (subscribeRes[tmplId_booking_cancellation] === 'accept') {
+                console.log('用户接受了预约取消通知');
+              }
+              // We proceed with cancellation regardless of permission acceptance.
+            },
+            fail: (subscribeErr) => {
+              console.error('wx.requestSubscribeMessage fail (for cancellation):', subscribeErr);
+            },
+            complete: () => {
+              // Now that permission has been requested, proceed to call the API.
+              console.log('Proceeding to callCancelBookingApi for booking:', bookingid);
           this.callCancelBookingApi(bookingid);
+            }
+          });
+          // --- MODIFICATION END ---
         } else if (res.cancel) {
           console.log('User cancelled the cancellation action');
         }
       }
-    })
+    });
   },
 
   /**

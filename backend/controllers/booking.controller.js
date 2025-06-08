@@ -228,8 +228,23 @@ const cancelBooking = async (req, res) => {
                 }
                 // --- End Permission Check ---
 
-                const cancelledByWhom = isCoach ? "coach" : "user";
-                const newStatus = `cancelled_by_${cancelledByWhom}`;
+                // --- MODIFICATION START ---
+                // --- Corrected Logic for Determining Cancellation Status ---
+                let newStatus;
+                if (isOwner) {
+                    // If the person cancelling is the owner of the booking, it's always by the user.
+                    // This correctly handles the case where the coach cancels their own booking.
+                    newStatus = 'cancelled_by_user';
+                } else if (isCoach && !isOwner) {
+                    // This case applies only when the coach cancels a booking that is NOT their own.
+                    newStatus = 'cancelled_by_coach';
+                } else {
+                    // This case shouldn't be reached if the main permission check is correct,
+                    // but as a fallback, we treat it as a user cancellation.
+                    newStatus = 'cancelled_by_user';
+                }
+                // --- End of Corrected Logic ---
+                // --- MODIFICATION END ---
 
 
                 db.run('BEGIN TRANSACTION;');
@@ -279,12 +294,14 @@ const cancelBooking = async (req, res) => {
                             const bookingStartTime = new Date(originalBookingDetailsForNotification.startTime);
                             const formattedTimeSlot = `${format(bookingStartTime, 'MM月dd日 HH:mm')}`; // Shorter format
 
+                            // --- MODIFICATION START ---
                             let cancellationReason = '';
-                            if (cancelledByWhom === 'user') {
+                            if (newStatus === 'cancelled_by_user') {
                                 cancellationReason = '用户主动取消'; // "Cancelled by user"
-                            } else if (cancelledByWhom === 'coach') {
+                            } else if (newStatus === 'cancelled_by_coach') {
                                 cancellationReason = '教练取消了此预约'; // "The coach has cancelled this appointment"
                             }
+                            // --- MODIFICATION END ---
 
                             const studentMessageData = {
                                 "thing1": { "value": "辅导预约已取消" },       // 预约主题
@@ -333,7 +350,7 @@ const cancelBooking = async (req, res) => {
         res.status(500).json({ error: 'Failed to cancel booking due to an unexpected error.' });
     }
 };
-// MODIFICATION ENDS HERE
+
 
 const getMyUpcomingBookings = (req, res) => {
     // Get the authenticated user's OpenID from the token payload set by verifyToken middleware
