@@ -68,11 +68,12 @@ function initializeDatabase() {
         bookingId INTEGER PRIMARY KEY AUTOINCREMENT,
         userId TEXT NOT NULL,
         coachId TEXT NOT NULL,
-        slotId INTEGER NOT NULL, -- Removed UNIQUE constraint here
+        slotId INTEGER NOT NULL,
         startTime TEXT NOT NULL,
         endTime TEXT NOT NULL,
         status TEXT CHECK(status IN ('confirmed', 'cancelled_by_user', 'cancelled_by_coach', 'completed')) NOT NULL,
         createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        isReminderSent INTEGER NOT NULL DEFAULT 0, -- <-- ADD THIS LINE
         FOREIGN KEY (userId) REFERENCES Users(userId) ON DELETE CASCADE,
         FOREIGN KEY (slotId) REFERENCES AvailabilitySlots(slotId) ON DELETE RESTRICT
       )

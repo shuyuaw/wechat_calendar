@@ -14,6 +14,7 @@ console.log('------------------------------------');
 const express = require('express');
 const cors = require('cors');
 const db = require('./database.js'); // Import the database (ensures connection + init)
+const scheduler = require('./services/scheduler'); // <-- ADDED: Import the scheduler
 
 // --- Require Route Modules ---
 const authRoutes = require('./routes/auth.routes');
@@ -60,7 +61,9 @@ app.use((req, res, next) => {
 });
 
 
-// 6. Start the Server
+// 6. Start the Server & Scheduler
+scheduler.initScheduler(); // <-- ADDED: Initialize and start the background jobs
+
 const PORT = process.env.PORT || 3001;
 
 console.log("Attempting to start server listener...");

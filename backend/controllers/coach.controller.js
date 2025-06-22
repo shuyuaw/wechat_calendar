@@ -175,160 +175,119 @@ const updateCoachConfig = async (req, res) => {
 };
 
 
-// Updated function to handle deleting old slots and generating new ones with conflict check
-// This function is internal, called by updateCoachConfig, so it receives the verified coachId
+// START: Replaced Function
+// backend/controllers/coach.controller.js// (keep your existing getCoachConfig and updateCoachConfig functions, but replace this one)
 async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurationMinutes) {
-    // coachId received here is already verified as the designated coach
-    console.log(`Regenerating slots for coachId: ${coachId} with conflict check.`);
+    console.log(`Regenerating slots for coachId: ${coachId}.`);
     const WEEKS_TO_GENERATE = 8;
     const today = startOfDay(new Date());
     const todayISO = formatISO(today);
 
+    // Promisify db functions to use async/await cleanly
+    const dbAll = (sql, params) => new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
+    });
+    const dbRun = (sql, params) => new Promise((resolve, reject) => {
+        db.run(sql, params, function(err) { err ? reject(err) : resolve(this) });
+    });
+
     try {
-        // --- Step 1: Fetch future booked slots ---
+        // --- Step 1: Fetch all future booked slots to avoid conflicts ---
+        console.log(`Fetching future booked slots from ${todayISO} onwards for coach ${coachId}...`);
         const fetchBookedSql = `
             SELECT startTime, endTime FROM AvailabilitySlots
             WHERE coachId = ? AND status = 'booked' AND startTime >= ?
         `;
-        console.log(`Workspaceing future booked slots from ${todayISO} onwards for coach ${coachId}...`);
-        const bookedSlotsData = await new Promise((resolve, reject) => {
-            db.all(fetchBookedSql, [coachId, todayISO], (err, rows) => {
-                if (err) {
-                    console.error("Error fetching booked slots:", err.message);
-                    return reject(new Error('Failed to fetch booked slots.'));
-                }
-                resolve(rows);
-            });
-        });
+        const bookedSlotsData = await dbAll(fetchBookedSql, [coachId, todayISO]);
         const bookedIntervals = bookedSlotsData.map(slot => ({
             start: parseISO(slot.startTime),
             end: parseISO(slot.endTime)
         }));
-        console.log(`Found ${bookedIntervals.length} future booked slots to check against for coach ${coachId}.`);
+        console.log(`Found ${bookedIntervals.length} future booked slots to check against.`);
 
-        // --- Steps 2-4: Delete old, Prepare Insert, Generate/Insert New (within serialize) ---
-        const generationResult = await new Promise((resolve, reject) => {
-            db.serialize(async () => {
-                try { // Add try/catch around the whole serialized block
-                    // --- Step 2: Delete existing future 'available' slots ---
+        // --- Step 2: Delete existing future 'available' slots THAT ARE NOT BOOKED ---
+        console.log(`Deleting future available slots from ${todayISO} onwards for coach ${coachId}...`);
                     const deleteSql = `
                         DELETE FROM AvailabilitySlots
-                        WHERE coachId = ? AND status = 'available' AND startTime >= ?
-                    `;
-                    console.log(`Deleting future available slots from ${todayISO} onwards for coach ${coachId}...`);
-                    const deleteResult = await new Promise((res, rej) => {
-                        db.run(deleteSql, [coachId, todayISO], function (deleteErr) {
-                            if (deleteErr) {
-                                console.error("Error deleting old availability slots:", deleteErr.message);
-                                return rej(new Error('Failed to delete old slots.'));
-                            }
-                            console.log(`Deleted ${this.changes} old available slots for coach ${coachId}.`);
-                            res(this.changes);
-                        });
-                    });
+            WHERE
+                coachId = ?
+                AND status = 'available'
+                AND startTime >= ?
+                AND slotId NOT IN (SELECT DISTINCT slotId FROM Bookings WHERE slotId IS NOT NULL)
+        `;
+        const deleteResult = await dbRun(deleteSql, [coachId, todayISO]);
+        console.log(`Deleted ${deleteResult.changes} old unreferenced available slots.`);
 
-                    // --- Step 3: Prepare statement ---
-                    const insertSql = `
-                        INSERT INTO AvailabilitySlots (coachId, startTime, endTime, status)
-                        VALUES (?, ?, ?, 'available')
-                    `;
-                    const stmt = await new Promise((res, rej) => {
-                        const prepStmt = db.prepare(insertSql, (prepareErr) => {
-                             if (prepareErr) {
-                                 console.error("Error preparing insert statement:", prepareErr.message);
-                                 return rej(new Error('Failed to prepare slot insertion statement.'));
-                             }
-                             res(prepStmt);
-                        });
-                    });
-
-                    // --- Step 4: Generate and insert new slots ---
-                    console.log(`Generating new slots for the next ${WEEKS_TO_GENERATE} weeks for coach ${coachId}...`);
+        // --- Step 3: Generate and insert new slots ---
+        console.log(`Generating new slots for the next ${WEEKS_TO_GENERATE} weeks...`);
                     let slotsGenerated = 0;
                     let slotsSkipped = 0;
                     const daysToGenerate = WEEKS_TO_GENERATE * 7;
                     const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const insertSlots = [];
 
                     for (let i = 0; i < daysToGenerate; i++) {
                         const currentDate = addDays(today, i);
-                        const dayOfWeekIndex = getDay(currentDate);
-                        const dayName = dayMapping[dayOfWeekIndex];
-                        const timeSlots = weeklyTemplate[dayName]; // Use the passed template
+            const dayName = dayMapping[getDay(currentDate)];
+            const timeSlots = weeklyTemplate[dayName];
 
-                        if (Array.isArray(timeSlots) && timeSlots.length > 0) { // Check if it's an array
+            if (Array.isArray(timeSlots) && timeSlots.length > 0) {
                             for (const timeString of timeSlots) {
                                 try {
                                     const [hour, minute] = timeString.split(':').map(Number);
-                                    if (isNaN(hour) || isNaN(minute)) throw new Error('Invalid time format'); // Basic format check
-
                                     const slotStartTime = setMilliseconds(setSeconds(setMinutes(setHours(currentDate, hour), minute), 0), 0);
                                     const slotEndTime = addMinutes(slotStartTime, sessionDurationMinutes);
 
-                                    // Check for conflicts
-                                    let isConflict = false;
-                                    for (const bookedInterval of bookedIntervals) {
-                                        if (isBefore(slotStartTime, bookedInterval.end) && isAfter(slotEndTime, bookedInterval.start)) {
-                                            isConflict = true;
-                                            slotsSkipped++;
-                                            // console.log(`Conflict detected: Skipping generation for ${formatISO(slotStartTime)}`); // Less verbose logging
-                                            break;
-                                        }
-                                    }
+                        // Check for conflicts with already booked slots
+                        let isConflict = bookedIntervals.some(interval =>
+                            isBefore(slotStartTime, interval.end) && isAfter(slotEndTime, interval.start)
+                        );
 
-                                    // Insert if no conflict
                                     if (!isConflict) {
-                                        let startTimeISO = formatISO(slotStartTime);
-                                        let endTimeISO = formatISO(slotEndTime);
-                                        await new Promise((res_run, rej_run) => {
-                                            stmt.run(coachId, startTimeISO, endTimeISO, function (insertErr) { // Use verified coachId
-                                                if (insertErr) {
-                                                    console.error(`Error inserting slot for ${startTimeISO}:`, insertErr.message);
-                                                    // Decide if one error should stop all generation (rej_run) or just log (res_run)
-                                                } else {
-                                                    slotsGenerated++;
-                                                }
-                                                res_run();
-                                            });
-                                        });
+                            insertSlots.push({
+                                coachId: coachId,
+                                startTime: formatISO(slotStartTime),
+                                endTime: formatISO(slotEndTime)
+                            });
+                            slotsGenerated++;
+                        } else {
+                            slotsSkipped++;
                                     }
                                 } catch (timeErr) {
-                                    console.error(`Error processing timeString "${timeString}" for ${formatISO(currentDate)}:`, timeErr.message);
+                        console.error(`Error processing timeString "${timeString}"`, timeErr);
                                 }
                             }
-                        } else if (timeSlots !== undefined && timeSlots !== null) {
-                            // Log if day exists in template but is not an array or empty
-                            console.warn(`Template for ${dayName} is not a valid array or is empty.`);
-                        }
-                    } // End loop days
+            }
+        }
 
-                    // Finalize statement
-                    await new Promise((res_fin, rej_fin) => {
-                         stmt.finalize((finalizeErr) => {
-                              if (finalizeErr) {
-                                  console.error("Error finalizing statement:", finalizeErr.message);
-                                  // Don't reject the whole process for finalize error? Or should we?
-                              }
-                              console.log(`Slot generation complete for coach ${coachId}. Generated: ${slotsGenerated}, Skipped: ${slotsSkipped}.`);
-                              res_fin();
-                         });
+        // --- Step 4: Batch insert the new slots in a transaction ---
+        if (insertSlots.length > 0) {
+            await dbRun('BEGIN TRANSACTION;');
+            try {
+                const stmt = db.prepare("INSERT INTO AvailabilitySlots (coachId, startTime, endTime, status) VALUES (?, ?, ?, 'available')");
+                for (const slot of insertSlots) {
+                    await new Promise((resolve, reject) => {
+                        stmt.run(slot.coachId, slot.startTime, slot.endTime, err => err ? reject(err) : resolve());
                     });
-
-                    resolve({ slotsGenerated, slotsSkipped }); // Resolve outer promise after serialize finishes
-
-                } catch(serializeError) { // Catch errors within the serialize block
-                    console.error("Error during serialized database operations:", serializeError);
-                    reject(serializeError); // Reject the outer promise
                 }
-            }); // End db.serialize
-        }); // End generationResult Promise
-
-        return generationResult;
+                stmt.finalize();
+                await dbRun('COMMIT;');
+            } catch(batchInsertError) {
+                console.error("Error during batch insert, rolling back.", batchInsertError);
+                await dbRun('ROLLBACK;');
+                throw batchInsertError; // Propagate error
+                              }
+        }
+        
+        console.log(`Slot generation complete. Generated: ${slotsGenerated}, Skipped: ${slotsSkipped}.`);
+        return { slotsGenerated, slotsSkipped };
 
     } catch (error) {
-        console.error(`Critical error during slot regeneration for coach ${coachId}:`, error.message, error.stack);
-        throw error; // Re-throw to be caught by updateCoachConfig
+        console.error(`Critical error during slot regeneration for coach ${coachId}:`, error.stack);
+        throw error;
     }
 }
+// END: Replaced Function
 
 
 // Controller function for the coach to get confirmed bookings for a specific date
