@@ -47,7 +47,7 @@
     * 提供仅教练可访问的页面（通过登录状态判断）进行 `weeklyTemplate` 设置。
     * 后端提供 API (`updateCoachConfig`) 接收模板数据。
     * **实现方式：** 当 `weeklyTemplate` 更新后，后端触发一个逻辑：
-        * **删除现有未来时段:** 移除该教练所有 `status='available'` 且 `startTime` 在未来（即大于当前时间戳）N 周内（例如 8 周）的 `AvailabilitySlots` 记录。
+        * **删除现有时段:** 移除该教练所有 `status='available'`的记录。
         * **生成新的未来时段:** 根据新的 `weeklyTemplate` 和 `sessionDurationMinutes`，生成新的 `AvailabilitySlots` 记录。关键点在于，只生成 `startTime` 大于或等于当前时间戳的时段。对于这些新生成的未来时段，将其 `status` 设置为 'available'。
         * **(可选，为清晰起见推荐):** 如果需要完整的历史记录，可以考虑为历史上从未被预订过的时段定义一个类似 'past_unbooked' 的状态。否则，这些时段要么不被生成，要么在初始删除时如果属于 'available' 类别则被删除。
     * **例外处理：** 教练以"特殊学员"身份登录前端，通过正常的预约流程来"占用"某个 `available` 的 slot（使其变为 `booked`），或通过特殊权限（后端 API 判断调用者为教练）取消某个非自己预约的 `booked` slot（使其变为 `available`）。
