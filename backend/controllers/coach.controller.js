@@ -175,12 +175,12 @@ const updateCoachConfig = async (req, res) => {
 };
 
 
-// START: Replaced Function
-// backend/controllers/coach.controller.js// (keep your existing getCoachConfig and updateCoachConfig functions, but replace this one)
+// START: MODIFIED FUNCTION
 async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurationMinutes) {
     console.log(`Regenerating slots for coachId: ${coachId}.`);
     const WEEKS_TO_GENERATE = 8;
     const today = startOfDay(new Date());
+    const currentTime = new Date(); // Get the current time for the future-only check
     const todayISO = formatISO(today);
 
     // Promisify db functions to use async/await cleanly
@@ -205,23 +205,21 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
         }));
         console.log(`Found ${bookedIntervals.length} future booked slots to check against.`);
 
-        // --- Step 2: Delete existing future 'available' slots THAT ARE NOT BOOKED ---
-        console.log(`Deleting future available slots from ${todayISO} onwards for coach ${coachId}...`);
+        // --- Step 2: Delete ALL existing 'available' slots for the coach ---
+        console.log(`Deleting ALL available (unbooked) slots for coach ${coachId}...`);
                     const deleteSql = `
                         DELETE FROM AvailabilitySlots
-            WHERE
-                coachId = ?
-                AND status = 'available'
-                AND startTime >= ?
-                AND slotId NOT IN (SELECT DISTINCT slotId FROM Bookings WHERE slotId IS NOT NULL)
+            WHERE coachId = ? AND status = 'available'
         `;
-        const deleteResult = await dbRun(deleteSql, [coachId, todayISO]);
-        console.log(`Deleted ${deleteResult.changes} old unreferenced available slots.`);
+        // The startTime check is removed to delete all available slots, not just future ones.
+        const deleteResult = await dbRun(deleteSql, [coachId]);
+        console.log(`Deleted ${deleteResult.changes} old available slots.`);
+
 
         // --- Step 3: Generate and insert new slots ---
         console.log(`Generating new slots for the next ${WEEKS_TO_GENERATE} weeks...`);
                     let slotsGenerated = 0;
-                    let slotsSkipped = 0;
+        let slotsSkipped = 0; // Covers past slots, conflicts, and other errors
                     const daysToGenerate = WEEKS_TO_GENERATE * 7;
                     const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const insertSlots = [];
@@ -236,10 +234,13 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
                                 try {
                                     const [hour, minute] = timeString.split(':').map(Number);
                                     const slotStartTime = setMilliseconds(setSeconds(setMinutes(setHours(currentDate, hour), minute), 0), 0);
+
+                        // --- FUTURE CHECK: Only generate slots that start after the current time ---
+                        if (isAfter(slotStartTime, currentTime)) {
                                     const slotEndTime = addMinutes(slotStartTime, sessionDurationMinutes);
 
                         // Check for conflicts with already booked slots
-                        let isConflict = bookedIntervals.some(interval =>
+                            const isConflict = bookedIntervals.some(interval =>
                             isBefore(slotStartTime, interval.end) && isAfter(slotEndTime, interval.start)
                         );
 
@@ -251,10 +252,16 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
                             });
                             slotsGenerated++;
                         } else {
+                                // This slot conflicts with a booked one, so skip it.
+                                slotsSkipped++;
+                            }
+                        } else {
+                            // This slot is in the past, so skip it.
                             slotsSkipped++;
                                     }
                                 } catch (timeErr) {
                         console.error(`Error processing timeString "${timeString}"`, timeErr);
+                        slotsSkipped++;
                                 }
                             }
             }
@@ -287,7 +294,7 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
         throw error;
     }
 }
-// END: Replaced Function
+// END: MODIFIED FUNCTION
 
 
 // Controller function for the coach to get confirmed bookings for a specific date
