@@ -19,10 +19,14 @@ Page({
   },
 
   onLoad(options) {
+    console.log('[coachBookings.js] Page loaded.'); // ADDED
     if (app.globalData.openid) {
+      console.log('[coachBookings.js] OpenID was already available.'); // ADDED
       this.checkAuthorization(app.globalData.openid);
     } else {
+      console.log('[coachBookings.js] OpenID not ready. Setting a callback.'); // ADDED
       app.openidReadyCallback = openid => {
+        console.log('[coachBookings.js] openidReadyCallback has been executed.'); // ADDED
         if (openid) {
           this.checkAuthorization(openid);
         } else {
@@ -33,6 +37,7 @@ Page({
   },
 
   checkAuthorization(openid) {
+    console.log("Current User's OpenID:", openid); 
     if (openid === DESIGNATED_COACH_OPENID) {
       this.setData({
         isCoach: true,
