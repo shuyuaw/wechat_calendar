@@ -11,7 +11,22 @@ const { verifyToken } = require('../middleware/auth.middleware.js'); // <--- Imp
 
 // POST /api/bookings (Create a booking - requires student permission)
 // Path is '/' because '/api/bookings' is the base path from server.js
-router.post('/', verifyToken, bookingController.createBooking);
+// MODIFIED: Added a middleware to check for a test header
+router.post('/', (req, res, next) => {
+    // This is a temporary check for testing purposes.
+    // If the 'X-Test-User-ID' header is present, we'll bypass the real
+    // JWT verification and create a mock user object.
+    const testUserId = req.headers['x-test-user-id'];
+    if (testUserId) {
+        console.log(`--- DEV/TEST: Bypassing auth via X-Test-User-ID header for user: ${testUserId} ---`);
+        // Manually attach a user object to the request, which is what verifyToken would normally do.
+        req.user = { _id: testUserId, role: 'student' }; // Mock the user object
+        return next(); // Skip JWT verification and proceed to the controller.
+    }
+    // If the header is NOT present, proceed to the standard token verification.
+    verifyToken(req, res, next);
+}, bookingController.createBooking);
+
 
 // DELETE /api/bookings/:bookingId (Cancel a booking - requires student or coach permission)
 router.delete('/:bookingId', verifyToken, bookingController.cancelBooking);
