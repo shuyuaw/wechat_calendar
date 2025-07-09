@@ -17,6 +17,7 @@ Page({
      */
     data: {
         availableSlots: [], // Initialize empty array to hold slots
+        groupedSlots: [], // ADDED: To hold slots grouped by date
         isLoading: false,
         error: null,
     },
@@ -62,6 +63,7 @@ Page({
                 if (res.statusCode === 200 && Array.isArray(res.data)) {
 
                     // --- CORRECTED Formatting Logic ---
+                    const weekDays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
                     const formattedSlots = res.data.map(slot => {
                         try {
                             // Parse ISO strings into Date objects
@@ -72,7 +74,8 @@ Page({
                             const year = startDate.getFullYear();
                             const month = (startDate.getMonth() + 1).toString().padStart(2, '0');
                             const day = startDate.getDate().toString().padStart(2, '0');
-                            const displayDate = `${year}-${month}-${day}`; // Calculate displayDate
+                            const dayOfWeek = weekDays[startDate.getDay()];
+                            const displayDate = `${year}-${month}-${day} ${dayOfWeek}`; // Calculate displayDate
 
                             // Format Time part (HH:MM - HH:MM)
                             const startHours = startDate.getHours().toString().padStart(2, '0');
@@ -95,9 +98,28 @@ Page({
                     });
                     // --- End Formatting Logic ---
 
+                    // --- ADDED: Logic to group slots by date ---
+                    const grouped = formattedSlots.reduce((acc, slot) => {
+                        // Find an existing group for the date
+                        const group = acc.find(g => g.date === slot.displayDate);
+                        if (group) {
+                            // Add the slot to the existing group
+                            group.slots.push(slot);
+                        } else {
+                            // Create a new group for the date
+                            acc.push({
+                                date: slot.displayDate,
+                                slots: [slot]
+                            });
+                        }
+                        return acc;
+                    }, []);
+                    // --- End of Grouping Logic ---
+
                     this.setData({
                         // Use the formatted data instead of the raw res.data
                         availableSlots: formattedSlots,
+                        groupedSlots: grouped, // Set the new grouped data
                         isLoading: false,
                     });
                 } else {

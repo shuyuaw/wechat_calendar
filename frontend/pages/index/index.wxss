@@ -34,6 +34,10 @@
 
 /* ADDED: Styles for my bookings button */
 .my-bookings-button {
+  background-color: #007aff;
+  color: white;
+  padding: 10rpx 20rpx;
+  border-radius: 5px;
   /* Add specific styling if needed, e.g., margin-left */
 }
 
@@ -50,8 +54,21 @@
     margin-top: 20rpx;
 }
 
+.date-group {
+  margin-bottom: 20rpx; /* Add space between date groups */
+}
+
+.date-header {
+  font-size: 32rpx;
+  font-weight: bold;
+  padding: 15rpx 0;
+  margin-bottom: 10rpx;
+  color: #333;
+  border-bottom: 1px solid #eee; /* Optional: adds a line under the date */
+}
+
 .slot-list {
-  margin-top: 20rpx;
+  margin-top: 0; /* Reset margin as it's now handled by date-group */
 }
 
 .slot-item {

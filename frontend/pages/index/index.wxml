@@ -13,28 +13,27 @@
     <button size="mini" bindtap="fetchAvailableSlots">重试</button>
   </view>
 
-  <view wx:if="{{!isLoading && !error && availableSlots.length === 0}}" class="no-slots-message">
+  <view wx:if="{{!isLoading && !error && groupedSlots.length === 0}}" class="no-slots-message">
     <text>本周当前没有可预约时段。</text>
   </view>
 
-  <block wx:if="{{!isLoading && !error && availableSlots.length > 0}}">
-    <view class="slot-list">
-      <view
-        wx:for="{{availableSlots}}"
-        wx:key="slotId"
-        class="slot-item"
-        bindtap="handleBookSlot"
-        data-slot-id="{{item.slotId}}"
-        data-start-time="{{item.startTime}}"
-      >
-        <view class="slot-datetime-details">
-          <text class="slot-date">{{item.displayDate}}</text>
-          <text class="slot-time">{{item.displayTime}}</text>
+  <block wx:if="{{!isLoading && !error && groupedSlots.length > 0}}">
+    <view wx:for="{{groupedSlots}}" wx:for-item="group" wx:key="date" class="date-group">
+      <view class="date-header">{{group.date}}</view>
+      <view class="slot-list">
+        <view
+          wx:for="{{group.slots}}"
+          wx:key="slotId"
+          class="slot-item"
+          bindtap="handleBookSlot"
+          data-slot-id="{{item.slotId}}"
+          data-start-time="{{item.startTime}}"
+        >
+          <view class="slot-datetime-details">
+            <text class="slot-time">{{item.displayTime}}</text>
+          </view>
+          <text class="book-indicator">点击预约</text>
         </view>
-        <text class="slot-status {{item.status === 'available' ? 'status-available' : (item.status === 'booked' ? 'status-booked' : (item.status === 'confirmed' ? 'status-confirmed' : ''))}}">
-          状态: {{item.status === 'available' ? '可预约' : (item.status === 'booked' ? '已预约' : (item.status === 'confirmed' ? '已确认' : item.status))}}
-        </text>
-        <text class="book-indicator">点击预约</text>
       </view>
     </view>
   </block>

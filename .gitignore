@@ -7,6 +7,7 @@ backend/.env
 
 # SQLite database file
 backend/*.db
+coach_app.db
 
 # Log files
 backend/*.log
