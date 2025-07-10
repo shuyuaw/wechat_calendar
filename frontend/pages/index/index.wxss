@@ -17,15 +17,16 @@
 /* ADDED: Styles for header actions */
 .header-actions {
   display: flex; /* Allows button to be side-by-side or managed easily */
-  justify-content: space-between; /* Pushes title left, button right */
   align-items: center;
   margin-bottom: 20rpx; /* Space below header */
+  width: 100%; /* Ensure the container spans the full width */
 }
 
 /* MODIFIED: Page title styles */
 .page-title {
   font-size: 36rpx; /* Was 40rpx */
   font-weight: bold;
+  flex-grow: 1; /* Make title expand to push button to the right */
   /* text-align: center; was removed */
   /* margin-bottom: 30rpx; was removed */
 }
