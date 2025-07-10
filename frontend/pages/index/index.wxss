@@ -54,6 +54,10 @@
 
 .date-group {
   margin-bottom: 40rpx; /* Increased space between date groups */
+  background-color: #ffffff;
+  border-radius: 16rpx;
+  padding: 20rpx 30rpx;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .date-header {
@@ -62,7 +66,7 @@
   padding: 15rpx 0;
   margin-bottom: 20rpx; /* Increased space below header */
   color: #333;
-  border-bottom: 1px solid #eee; /* Optional: adds a line under the date */
+  border-bottom: none; /* Removed border as the card provides separation */
 }
 
 .slot-list {
@@ -73,12 +77,16 @@
   display: flex; 
   justify-content: space-between; 
   align-items: center; 
-  padding: 25rpx 20rpx;
-  border: 1px solid #eee;
-  margin-bottom: 15rpx;
-  border-radius: 8rpx;
-  background-color: #f9f9f9;
+  padding: 25rpx 0; /* Adjusted padding */
+  border-bottom: 1px solid #f0f0f0; /* Use a lighter border for separation inside the card */
+  margin-bottom: 0;
+  border-radius: 0;
+  background-color: transparent; /* Transparent background inside the card */
   cursor: pointer; 
+}
+
+.slot-list .slot-item:last-child {
+  border-bottom: none; /* Remove border for the last item */
 }
 
 .slot-item:active {
@@ -98,9 +106,12 @@
 }
 
 .book-indicator {
-    font-size: 26rpx;
-    color: #007aff; 
-    font-weight: bold;
+    font-size: 24rpx;
+    color: #fff; 
+    font-weight: normal;
+    background-color: #007aff;
+    padding: 12rpx 24rpx;
+    border-radius: 30rpx;
 }
 
 .slot-status.booked {

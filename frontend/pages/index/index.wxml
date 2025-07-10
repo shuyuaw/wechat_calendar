@@ -32,7 +32,7 @@
           <view class="slot-datetime-details">
             <text class="slot-time">{{item.displayTime}}</text>
           </view>
-          <text class="book-indicator">点击预约</text>
+          <text class="book-indicator">预约</text>
         </view>
       </view>
     </view>
