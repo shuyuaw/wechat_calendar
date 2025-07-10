@@ -9,9 +9,7 @@
 
 /* MODIFIED: Container styles */
 .container {
-  padding-left: 20rpx;
-  padding-right: 20rpx;
-  padding-bottom: 20rpx;
+  padding: 20rpx 40rpx; /* Increased horizontal padding */
   /* font-family: sans-serif; was removed from previous .container definition */
   /* padding: 20rpx; was replaced by more specific paddings */
 }
@@ -55,14 +53,14 @@
 }
 
 .date-group {
-  margin-bottom: 20rpx; /* Add space between date groups */
+  margin-bottom: 40rpx; /* Increased space between date groups */
 }
 
 .date-header {
-  font-size: 32rpx;
+  font-size: 38rpx; /* Increased font size for better hierarchy */
   font-weight: bold;
   padding: 15rpx 0;
-  margin-bottom: 10rpx;
+  margin-bottom: 20rpx; /* Increased space below header */
   color: #333;
   border-bottom: 1px solid #eee; /* Optional: adds a line under the date */
 }
@@ -88,7 +86,7 @@
 }
 
 .slot-time {
-  font-size: 28rpx;
+  font-size: 26rpx; /* Decreased font size for visual distinction */
   flex-grow: 1; 
   margin-right: 20rpx;
 }
