@@ -2,21 +2,32 @@
 const { request } = require('../../utils/request.js'); // Adjusted path assuming utils is in the root of the project, or ../../utils if utils is sibling to pages
 const app = getApp();
 
-// Helper function (can be moved to utils.js)
-const formatBookingTime = (isoString) => {
-  if (!isoString) return 'N/A';
+// Helper function to format booking times consistently with the index page
+const formatBookingDisplay = (startTime, endTime) => {
+  if (!startTime || !endTime) return { displayDate: 'N/A', displayTime: 'N/A' };
   try {
-    const date = new Date(isoString);
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    // Example format: YYYY-MM-DD HH:MM
-    return `${year}-${month}-${day} ${hours}:${minutes}`;
+    const startDate = new Date(startTime);
+    const endDate = new Date(endTime);
+    const weekDays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+
+    // Format Date part (e.g., YYYY-MM-DD DayOfWeek)
+    const year = startDate.getFullYear();
+    const month = (startDate.getMonth() + 1).toString().padStart(2, '0');
+    const day = startDate.getDate().toString().padStart(2, '0');
+    const dayOfWeek = weekDays[startDate.getDay()];
+    const displayDate = `${year}-${month}-${day} ${dayOfWeek}`;
+
+    // Format Time part (HH:MM - HH:MM)
+    const startHours = startDate.getHours().toString().padStart(2, '0');
+    const startMinutes = startDate.getMinutes().toString().padStart(2, '0');
+    const endHours = endDate.getHours().toString().padStart(2, '0');
+    const endMinutes = endDate.getMinutes().toString().padStart(2, '0');
+    const displayTime = `${startHours}:${startMinutes} - ${endHours}:${endMinutes}`;
+
+    return { displayDate, displayTime };
   } catch (e) {
-    console.error("Error formatting date:", e);
-    return isoString; // Return original if error
+    console.error("Error formatting booking date/time:", e);
+    return { displayDate: 'Invalid Date', displayTime: 'Invalid Time' };
   }
 };
 
@@ -104,16 +115,15 @@ Page({
     .then(apiResponseBookings => { // apiResponseBookings is the data part from the successful response
       console.log('Fetched my bookings:', apiResponseBookings);
       if (Array.isArray(apiResponseBookings)) {
-        const formattedBookings = apiResponseBookings.map(booking => ({
-          ...booking,
-          // Ensure 'bookingId' from API response or '_id' from DB is consistently used.
-          // If API returns `_id` (common for MongoDB), use booking._id.
-          // If API returns `bookingId` (as seen in previous logs), use booking.bookingId.
-          // The key in WXML and data-attribute should match this.
-          id: booking.bookingId || booking._id, // Use 'id' as a consistent property for the template
-          displayStart: formatBookingTime(booking.startTime),
-          displayEnd: formatBookingTime(booking.endTime)
-        }));
+        const formattedBookings = apiResponseBookings.map(booking => {
+          const { displayDate, displayTime } = formatBookingDisplay(booking.startTime, booking.endTime);
+          return {
+            ...booking,
+            id: booking.bookingId || booking._id,
+            displayDate: displayDate,
+            displayTime: displayTime
+          };
+        });
         this.setData({ myBookings: formattedBookings, isLoading: false });
       } else {
         // This case might occur if the backend returns an object instead of an array on success,

@@ -1,5 +1,8 @@
 <view class="container page-container-safe-mybookings">
-  <view class="page-title">我的预约</view>
+  <view class="header-actions">
+    <view class="page-title">我的预约</view>
+    <button size="mini" class="back-button" bindtap="goBack">返回</button>
+  </view>
 
   <view wx:if="{{isLoading}}" class="loading-message">
     <text>正在加载我的预约...</text>
@@ -18,12 +21,12 @@
     <view class="booking-list">
       <view wx:for="{{myBookings}}" wx:key="bookingId" class="booking-item">
         <view class="booking-details">
-          <text class="booking-time">时间: {{item.displayStart}} - {{item.displayEnd}}</text>
-          </view>
+          <text class="booking-date">{{item.displayDate}}</text>
+          <text class="booking-time">{{item.displayTime}}</text>
+        </view>
         <button
           class="cancel-button"
           size="mini"
-          type="warn"
           bindtap="handleCancelBooking"
           data-bookingid="{{item.bookingId}}"
         >
