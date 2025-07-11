@@ -1,8 +1,9 @@
 // backend/database.js
 const sqlite3 = require('sqlite3').verbose(); // Use verbose for more detailed error reporting
+const path = require('path');
 
 // Define the path for the database file
-const DB_PATH = './coach_app.db';
+const DB_PATH = path.resolve(__dirname, 'coach_app.db');
 
 // Connect to the SQLite database.
 const db = new sqlite3.Database(DB_PATH, (err) => {
