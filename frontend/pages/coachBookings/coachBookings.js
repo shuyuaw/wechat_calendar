@@ -93,10 +93,12 @@ Page({
       const formattedBookings = apiResponseBookings.map(booking => {
         const startTimeShort = booking.startTime ? booking.startTime.substring(11, 16) : 'N/A';
         const endTimeShort = booking.endTime ? booking.endTime.substring(11, 16) : 'N/A';
+        const displayDate = booking.startTime ? booking.startTime.substring(0, 10) : 'N/A';
         return {
-            ...booking,
+          ...booking,
           displayStartTime: startTimeShort,
-          displayEndTime: endTimeShort
+          displayEndTime: endTimeShort,
+          displayDate: displayDate
         };
       });
 
