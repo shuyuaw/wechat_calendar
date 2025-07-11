@@ -1,16 +1,22 @@
 /* frontend/pages/coachBookings/coachBookings.wxss */
 .container {
-  padding-left: 20rpx;
-  padding-right: 20rpx;
-  padding-bottom: 20rpx; /* Or as desired */
+  padding: 20rpx;
 }
+
+.controls-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+}
+
 .date-selector {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 15rpx;
   background-color: #f7f7f7;
   border-radius: 8rpx;
-  margin-bottom: 20rpx;
 }
 
 .date-selector label {
@@ -22,6 +28,24 @@
   padding: 10rpx 15rpx;
   background-color: #fff;
   border-radius: 4rpx;
+}
+
+.button-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 10rpx;
+}
+
+button[type="primary"] {
+  background-color: #007aff;
+  color: white;
+  border: none;
+}
+
+button[type="default"] {
+  background-color: transparent;
+  color: #007aff;
+  border: 1px solid #007aff;
 }
 
 .booking-list-section {

@@ -1,20 +1,17 @@
-<view class="container">
-  <view class="container page-container-safe-bookings">
-    <view class="controls-bar">
-      <view class="date-selector">
-        <label>显示该日期的预约:</label>
-        <picker mode="date" value="{{selectedDate}}" bindchange="onDateChange">
-          <view class="picker-display">
-            {{selectedDate}}
-          </view>
-        </picker>
-      </view>
-      <button size="mini" type="default" class="nav-button-config" bindtap="goToConfigPage">每周模板页</button>
+<view class="container page-container-safe-bookings">
+  <view class="controls-bar">
+    <view class="date-selector">
+      <label>显示该日期的预约:</label>
+      <picker mode="date" value="{{selectedDate}}" bindchange="onDateChange">
+        <view class="picker-display">
+          {{selectedDate}}
+        </view>
+      </picker>
+    </view>
+    <view class="button-group">
+      <button size="mini" type="default" class="nav-button-config" bindtap="goToConfigPage">设置周模版</button>
       <button size="mini" type="primary" bindtap="showAllBookings">显示所有预约</button>
     </view>
-
-    <view class="booking-list-section">
-      </view>
   </view>
 
   <view class="booking-list-section">
