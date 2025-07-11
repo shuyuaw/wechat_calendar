@@ -247,5 +247,12 @@ Page({
     // setTimeout(() => { // This timeout might be removed if .finally handles it well
     //     wx.stopPullDownRefresh();
     // }, 1000);
+  },
+
+  /**
+   * Navigates back to the previous page.
+   */
+  goBack: function() {
+    wx.navigateBack();
   }
 })
