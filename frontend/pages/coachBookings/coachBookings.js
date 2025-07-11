@@ -70,7 +70,7 @@ Page({
       return;
     }
     this.setData({ isLoading: true, errorMsg: null, bookings: [] });
-    let url = '/api/coach/bookings';
+    let url = all ? '/api/coach/all-bookings' : '/api/coach/bookings';
     const dateToFetch = all ? null : this.data.selectedDate;
 
     if (dateToFetch) {

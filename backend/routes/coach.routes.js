@@ -16,6 +16,9 @@ router.get('/config', verifyToken, coachController.getCoachConfig);
 router.put('/config', verifyToken, coachController.updateCoachConfig);
 
 // GET /api/coach/bookings?date=YYYY-MM-DD
-router.get('/bookings', verifyToken, coachController.getCoachBookingsForDate); // <-- ADD THIS LINE
+router.get('/bookings', verifyToken, coachController.getCoachBookingsForDate);
+
+// GET /api/coach/all-bookings
+router.get('/all-bookings', verifyToken, coachController.getAllCoachBookings);
 
 module.exports = router;

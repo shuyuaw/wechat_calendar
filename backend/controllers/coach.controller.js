@@ -360,10 +360,50 @@ const getCoachBookingsForDate = async (req, res) => {
     }
 };
 
+// Controller function for the coach to get all confirmed bookings
+const getAllCoachBookings = async (req, res) => {
+    // --- Authorization Check ---
+    if (!checkCoachAuthorization(req, res)) {
+        return; // Stop execution if authorization fails
+    }
+    const coachOpenId = req.user.openid;
+    // --- End Authorization Check ---
+
+    try {
+        // --- Database Query ---
+        const sql = `
+            SELECT
+                b.bookingId, b.slotId, b.startTime, b.endTime,
+                b.status, b.userId, u.nickName AS userNickName
+            FROM Bookings b
+            LEFT JOIN Users u ON b.userId = u.userId
+            WHERE b.coachId = ?
+              AND b.status = 'confirmed'
+            ORDER BY b.startTime ASC
+        `;
+
+        console.log(`Querying all confirmed bookings for coach ${coachOpenId}`);
+
+        db.all(sql, [coachOpenId], (err, rows) => {
+            if (err) {
+                console.error(`Database error fetching all coach bookings:`, err.message);
+                return res.status(500).json({ error: 'Database error fetching bookings.' });
+            }
+            res.status(200).json(rows || []);
+        });
+        // --- End Database Query ---
+
+    } catch (error) {
+        console.error(`Error in getAllCoachBookings controller:`, error.message);
+        res.status(500).json({ error: 'Failed to retrieve all coach bookings.' });
+    }
+};
+
 
 module.exports = {
     getCoachConfig,
     updateCoachConfig,
     getCoachBookingsForDate,
+    getAllCoachBookings,
     // Note: regenerateAvailabilitySlots is internal and not exported
 };
