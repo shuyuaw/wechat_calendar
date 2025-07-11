@@ -15,7 +15,8 @@ Page({
     isLoading: false,
     errorMsg: null,
     isCoach: false,
-    openid: null
+    openid: null,
+    showAll: false
   },
 
   onLoad(options) {
@@ -63,21 +64,29 @@ Page({
     });
   },
 
-  fetchBookings() {
+  fetchBookings(all = false) {
     if (!this.data.isCoach) {
       console.warn("fetchBookings called without authorization flag set.");
       return;
     }
     this.setData({ isLoading: true, errorMsg: null, bookings: [] });
-    const dateToFetch = this.data.selectedDate;
-    console.log(`Workspaceing bookings for date: ${dateToFetch}.`); // MODIFIED (from Log 9)
+    let url = '/api/coach/bookings';
+    const dateToFetch = all ? null : this.data.selectedDate;
+
+    if (dateToFetch) {
+      console.log(`Fetching bookings for date: ${dateToFetch}.`);
+      url += `?date=${dateToFetch}`;
+    } else {
+      console.log('Fetching all bookings.');
+    }
 
     request({
-      url: `/api/coach/bookings?date=${dateToFetch}`,
+      url: url,
       method: 'GET',
     })
     .then(apiResponseBookings => {
-      console.log(`Received API response for bookings on ${dateToFetch}. Count: ${Array.isArray(apiResponseBookings) ? apiResponseBookings.length : 'N/A (not an array)'}`);
+      const logDate = dateToFetch || 'all dates';
+      console.log(`Received API response for bookings on ${logDate}. Count: ${Array.isArray(apiResponseBookings) ? apiResponseBookings.length : 'N/A (not an array)'}`);
 
 
     if (Array.isArray(apiResponseBookings)) {
@@ -91,18 +100,19 @@ Page({
         };
       });
 
-        console.log(`Successfully fetched and formatted ${formattedBookings.length} bookings for ${dateToFetch}.`); // MODIFIED (from Log 11)
+        console.log(`Successfully fetched and formatted ${formattedBookings.length} bookings for ${logDate}.`); // MODIFIED (from Log 11)
           this.setData({
           bookings: formattedBookings,
             isLoading: false
           });
         } else {
-        console.error(`Invalid data format received for bookings on ${dateToFetch}:`, apiResponseBookings); // MODIFIED (from Log 13) to include date
+        console.error(`Invalid data format received for bookings on ${logDate}:`, apiResponseBookings); // MODIFIED (from Log 13) to include date
       this.setData({ isLoading: false, errorMsg: '返回数据格式错误', bookings: [] });
         }
       })
       .catch(err => {
-      console.error(`Failed to fetch bookings for date ${dateToFetch}:`, err); // MODIFIED (from Log 14) to include date
+        const logDate = dateToFetch || 'all dates';
+      console.error(`Failed to fetch bookings for date ${logDate}:`, err); // MODIFIED (from Log 14) to include date
         this.setData({
           isLoading: false,
         errorMsg: err.message || '加载预约失败'
@@ -115,17 +125,26 @@ Page({
     const newDate = event.detail.value;
 
     this.setData({
-      selectedDate: newDate
+      selectedDate: newDate,
+      showAll: false
     });
 
       if (this.data.isCoach) {
-        this.fetchBookings();
+        this.fetchBookings(false);
       } else {
         console.warn('Not calling fetchBookings in onDateChange because user is not authorized.'); // Log 5 - KEPT (context improved)
       }
     } else {
       console.error('onDateChange triggered but event or event.detail is undefined.'); // Log 6 - KEPT
     }
+  },
+
+  showAllBookings() {
+    this.setData({
+      showAll: true,
+      selectedDate: '所有预约'
+    });
+    this.fetchBookings(true);
   },
 
   goToConfigPage() {
