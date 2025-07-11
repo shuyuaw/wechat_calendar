@@ -1,6 +1,7 @@
 // backend/server.js
 // backend/server.js
-require('dotenv').config(); // <--- ADD THIS LINE! It MUST be called.
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 // Optional but recommended debug logs:
 console.log('Checking env vars after dotenv config:');
