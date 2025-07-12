@@ -30,7 +30,7 @@
         <view class="booking-item" wx:for="{{bookings}}" wx:key="_id">
           <view wx:if="{{showAll}}">日期: {{item.displayDate}}</view>
           <view>时间: {{item.displayStartTime}} - {{item.displayEndTime}}</view>
-          <view>学员ID: {{item.userId || '未知'}}</view>
+          <view>学员: {{item.userNickName || '未知'}}</view>
         </view>
       </view>
     </block>

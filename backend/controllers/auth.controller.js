@@ -5,8 +5,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // --- Common function to handle DB interaction and JWT generation ---
-// (Moved the common logic here to avoid repetition)
-const processLoginAndGenerateToken = (openid, res) => {
+const processLoginAndGenerateToken = (openid, nickName, res) => { // Added nickName parameter
   if (!openid) {
      console.error("ProcessLogin: OpenID is missing.");
      return res.status(500).json({ error: 'Internal error: OpenID not determined.' });
@@ -33,10 +32,9 @@ const processLoginAndGenerateToken = (openid, res) => {
 
     if (!userRow) {
       // User not found, insert new user
-      console.log(`User ${openid} not found. Inserting new user.`);
+      console.log(`User ${openid} not found. Inserting new user with nickname: ${nickName}`);
       const insertUserSql = "INSERT INTO Users (userId, nickName) VALUES (?, ?)";
-      // Using openid as userId, null as default nickName
-      db.run(insertUserSql, [openid, null], (insertErr) => {
+      db.run(insertUserSql, [openid, nickName], (insertErr) => { // Use nickName here
         if (insertErr) {
           console.error("Database error inserting user:", insertErr.message);
           return res.status(500).json({ error: 'Database error inserting user.' });
@@ -45,9 +43,23 @@ const processLoginAndGenerateToken = (openid, res) => {
         generateAndSendToken(); // Send response after insert
       });
     } else {
-      // User found
-      console.log(`User ${openid} found.`);
-      generateAndSendToken(); // Send response immediately
+      // User found, update nickname if provided and different
+      if (nickName && userRow.nickName !== nickName) {
+        console.log(`User ${openid} found. Updating nickname to: ${nickName}`);
+        const updateUserSql = "UPDATE Users SET nickName = ? WHERE userId = ?";
+        db.run(updateUserSql, [nickName, openid], (updateErr) => {
+          if (updateErr) {
+            console.error("Database error updating user nickname:", updateErr.message);
+            // Do not block login for this error, but log it
+          } else {
+            console.log(`User ${openid} nickname updated successfully.`);
+          }
+          generateAndSendToken(); // Send response after update (or if no update needed)
+        });
+      } else {
+        console.log(`User ${openid} found. Nickname not provided or already up-to-date.`);
+        generateAndSendToken(); // Send response immediately
+      }
     }
   });
 };
@@ -56,7 +68,14 @@ const processLoginAndGenerateToken = (openid, res) => {
 // --- Main Login Handler ---
 const loginUser = async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, openid, userInfo } = req.body; // Destructure code, openid, and userInfo
+    const nickName = userInfo ? userInfo.nickName : null; // Extract nickName
+
+    // Scenario 1: Frontend is sending existing openid and new userInfo (e.g., after getUserProfile)
+    if (openid && userInfo && !code) {
+      console.log(`Updating user info for existing OpenID: ${openid}`);
+      return processLoginAndGenerateToken(openid, nickName, res);
+    }
 
     // --- START TEMPORARY MOCK LOGIC ---
     let targetOpenid = null;
@@ -80,15 +99,15 @@ const loginUser = async (req, res) => {
 
     if (isMock) {
        // Use the common function for DB ops and token generation for mock users
-       return processLoginAndGenerateToken(targetOpenid, res);
+       return processLoginAndGenerateToken(targetOpenid, nickName, res); // Pass nickName
     }
     // --- END TEMPORARY MOCK LOGIC ---
 
 
-    // If it wasn't a mock code, proceed with the real WeChat API call
+    // Scenario 2: Standard WeChat login with code
     console.log('REAL LOGIN: Processing code via WeChat API...');
     if (!code) {
-      return res.status(400).json({ error: 'Login code is required.' });
+      return res.status(400).json({ error: 'Login code is required for initial login.' });
     }
 
     const appId = process.env.WECHAT_APP_ID;
@@ -110,11 +129,11 @@ const loginUser = async (req, res) => {
       return res.status(400).json({ error: `WeChat API Error: ${wechatData.errmsg}` });
     }
 
-    const { openid } = wechatData; // Only need openid here
-    console.log(`REAL LOGIN: Successfully retrieved OpenID: ${openid}`);
+    const { openid: wechatOpenid } = wechatData; // Rename to avoid conflict with req.body.openid
+    console.log(`REAL LOGIN: Successfully retrieved OpenID: ${wechatOpenid}`);
 
     // Use the common function for DB ops and token generation for real users
-    processLoginAndGenerateToken(openid, res);
+    processLoginAndGenerateToken(wechatOpenid, nickName, res); // Pass nickName
 
   } catch (error) {
     // Catch errors from axios or other synchronous issues

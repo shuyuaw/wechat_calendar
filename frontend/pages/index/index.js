@@ -153,47 +153,103 @@ Page({
 
         const { slotId, startTime } = event.currentTarget.dataset;
         const openid = app.globalData.openid;
+        const userInfo = app.globalData.userInfo;
 
         if (!openid) {
           wx.showToast({ title: '请先登录', icon: 'none' });
             return;
         }
 
+        // Check if user's nickname is available
+        if (!userInfo || !userInfo.nickName) {
+            wx.showModal({
+                title: '需要您的微信昵称',
+                content: '为了更好地为您服务，请授权获取您的微信昵称。',
+                confirmText: '去授权',
+                cancelText: '取消',
+                success: (modalRes) => {
+                    if (modalRes.confirm) {
+                        wx.getUserProfile({
+                            desc: '用于预约时显示您的昵称', // Declaration for the user
+                            success: profileRes => {
+                                console.log('[index.js] User profile obtained:', profileRes.userInfo);
+                                app.globalData.userInfo = profileRes.userInfo; // Update global user info
+
+                                // Send updated user info to backend (login API handles update)
+                                wx.request({
+                                    url: 'http://localhost:3001/api/login', // Use your actual backend URL
+                                    method: 'POST',
+                                    data: {
+                                        code: null, // No new code needed, just update user info
+                                        openid: openid, // Pass existing openid
+                                        userInfo: profileRes.userInfo
+                                    },
+                                    success: (backendRes) => {
+                                        if (backendRes.statusCode === 200) {
+                                            console.log('User info updated on backend. Proceeding with booking.');
+                                            this.proceedWithBooking(slotId, startTime, openid);
+                                        } else {
+                                            console.error('Failed to update user info on backend:', backendRes);
+                                            wx.showToast({ title: '更新信息失败，请重试', icon: 'none' });
+                                        }
+                                    },
+                                    fail: (err) => {
+                                        console.error('Request to update user info failed:', err);
+                                        wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+                                    }
+                                });
+                            },
+                            fail: profileErr => {
+                                console.error('[index.js] wx.getUserProfile failed:', profileErr);
+                                wx.showToast({ title: '获取昵称失败，无法预约', icon: 'none' });
+                            }
+                        });
+                    } else if (modalRes.cancel) {
+                        wx.showToast({ title: '取消预约', icon: 'none' });
+                    }
+                }
+            });
+            return; // Stop here if nickname is not available
+        }
+
+        // If nickname is available, proceed with booking
+        this.proceedWithBooking(slotId, startTime, openid);
+    },
+
+    // New helper function to encapsulate the booking logic
+    proceedWithBooking: function(slotId, startTime, openid) {
         const formattedDisplayTime = startTime ? new Date(startTime).toLocaleString() : '这个时段';
         wx.showModal({
             title: '确认预约',
-          content: `您确定要预约 ${formattedDisplayTime} 吗？`,
+            content: `您确定要预约 ${formattedDisplayTime} 吗？`,
             success: (res) => {
                 if (res.confirm) {
                     console.log('User confirmed booking for slot:', slotId);
 
-              // --- Call requestSubscribeMessage BEFORE making the booking API call ---
-              const tmplId_booking_confirmation = 'Bai8NNhUQlXdOJaMrMIUv5bblC_W7wb9w3G9c-Ylip0';
-              const tmplId_booking_reminder = 'YUu-DQjYHd8zUmQdgR5k98fhV7ojQsDYkX_lL-5pfB0';
+                    const tmplId_booking_confirmation = 'Bai8NNhUQlXdOJaMrMIUv5bblC_W7wb9w3G9c-Ylip0';
+                    const tmplId_booking_reminder = 'YUu-DQjYHd8zUmQdgR5k98fhV7ojQsDYkX_lL-5pfB0';
 
-              wx.requestSubscribeMessage({
-                tmplIds: [tmplId_booking_confirmation, tmplId_booking_reminder],
-                success: (subscribeRes) => {
-                  console.log('wx.requestSubscribeMessage success:', subscribeRes);
-                  if (subscribeRes[tmplId_booking_confirmation] === 'accept') {
-                    console.log('用户接受了预约成功通知');
-                  }
-                  if (subscribeRes[tmplId_booking_reminder] === 'accept') {
-                    console.log('用户接受了预约提醒通知');
-                  }
-                  // TODO: Optionally send these preferences to your backend
-                },
-                fail: (subscribeErr) => {
-                  console.error('wx.requestSubscribeMessage fail:', subscribeErr);
-                },
-                complete: () => {
-                  // Now that permission has been requested (or failed), proceed to book.
-                  console.log('Proceeding to callCreateBookingApi for slot:', slotId);
-                  this.callCreateBookingApi(slotId, openid); // Pass openid as userId
-                }
-              });
+                    wx.requestSubscribeMessage({
+                        tmplIds: [tmplId_booking_confirmation, tmplId_booking_reminder],
+                        success: (subscribeRes) => {
+                            console.log('wx.requestSubscribeMessage success:', subscribeRes);
+                            if (subscribeRes[tmplId_booking_confirmation] === 'accept') {
+                                console.log('用户接受了预约成功通知');
+                            }
+                            if (subscribeRes[tmplId_reminder] === 'accept') {
+                                console.log('用户接受了预约提醒通知');
+                            }
+                        },
+                        fail: (subscribeErr) => {
+                            console.error('wx.requestSubscribeMessage fail:', subscribeErr);
+                        },
+                        complete: () => {
+                            console.log('Proceeding to callCreateBookingApi for slot:', slotId);
+                            this.callCreateBookingApi(slotId, openid);
+                        }
+                    });
                 } else if (res.cancel) {
-              console.log('User cancelled booking action');
+                    console.log('User cancelled booking action');
                 }
             }
         });
