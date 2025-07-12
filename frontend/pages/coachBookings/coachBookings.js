@@ -90,7 +90,17 @@ Page({
 
 
     if (Array.isArray(apiResponseBookings)) {
-      const formattedBookings = apiResponseBookings.map(booking => {
+      let bookingsToDisplay = apiResponseBookings;
+
+      if (all) {
+        const now = new Date();
+        bookingsToDisplay = apiResponseBookings.filter(booking => {
+          const bookingStartTime = new Date(booking.startTime);
+          return bookingStartTime >= now;
+        });
+      }
+
+      const formattedBookings = bookingsToDisplay.map(booking => {
         const startTimeShort = booking.startTime ? booking.startTime.substring(11, 16) : 'N/A';
         const endTimeShort = booking.endTime ? booking.endTime.substring(11, 16) : 'N/A';
         const displayDate = booking.startTime ? booking.startTime.substring(0, 10) : 'N/A';
@@ -141,10 +151,10 @@ Page({
     }
   },
 
-  showAllBookings() {
+  showAllFutureBookings() {
     this.setData({
       showAll: true,
-      selectedDate: '所有预约'
+      selectedDate: '所有未来预约'
     });
     this.fetchBookings(true);
   },
