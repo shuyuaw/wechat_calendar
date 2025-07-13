@@ -9,4 +9,9 @@ const slotController = require('../controllers/slot.controller.js');
 router.get('/', slotController.getSlotsForDate);
 // GET /api/slots/week?startDate=YYYY-MM-DD
 router.get('/week', slotController.getSlotsForWeek);
+
+// Define route for deleting a slot by its ID
+// DELETE /api/slots/:slotId
+router.delete('/:slotId', slotController.deleteSlot);
+
 module.exports = router;

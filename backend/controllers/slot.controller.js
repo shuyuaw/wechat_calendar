@@ -122,7 +122,46 @@ const getSlotsForWeek = async (req, res) => {
   }
 };
 
+// Controller function to delete a specific slot
+const deleteSlot = async (req, res) => {
+  const { slotId } = req.params; // Get slotId from URL parameter, e.g., /api/slots/123
+
+  // --- Validate Input ---
+  if (!slotId || isNaN(parseInt(slotId))) {
+    return res.status(400).json({ error: 'Invalid or missing slotId.' });
+  }
+
+  try {
+    // --- Database Deletion ---
+    // The ON DELETE SET NULL on the Bookings table will automatically handle
+    // setting the slotId to NULL for any bookings that reference this slot.
+    const sql = "DELETE FROM AvailabilitySlots WHERE slotId = ?";
+
+    db.run(sql, [slotId], function(err) {
+      if (err) {
+        console.error(`Database error deleting slot ${slotId}:`, err.message);
+        return res.status(500).json({ error: 'Database error while deleting the slot.' });
+      }
+
+      // this.changes provides the number of rows deleted.
+      if (this.changes === 0) {
+        // If no rows were deleted, it means the slotId was not found.
+        return res.status(404).json({ message: 'Slot not found.' });
+      }
+
+      // Successfully deleted
+      res.status(200).json({ message: `Slot ${slotId} deleted successfully.` });
+    });
+    // --- End Database Deletion ---
+
+  } catch (error) {
+    console.error(`Error in deleteSlot controller for slotId ${slotId}:`, error.message);
+    res.status(500).json({ error: 'Failed to delete the slot.' });
+  }
+};
+
 module.exports = {
   getSlotsForDate,
   getSlotsForWeek,
+  deleteSlot,
 };
