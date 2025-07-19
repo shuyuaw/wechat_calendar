@@ -10,6 +10,9 @@ WORKDIR /app
 # If these files don't change, Docker won't re-run 'npm install'.
 COPY package*.json ./
 
+# Install Python and build tools required for node-gyp (e.g., for sqlite3)
+RUN apk add --no-cache python3 make g++
+
 # Install app dependencies
 RUN npm install
 
