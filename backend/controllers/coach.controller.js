@@ -10,7 +10,6 @@ const {
     setMilliseconds,
     isBefore,
     isAfter,
-    parseISO,
     parse: parseDate,
     isValid: isValidDate,
     startOfDay,
@@ -139,8 +138,8 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
         // Format today's start in UTC for the query
         const [bookedSlotsData] = await connection.query(fetchBookedSql, [coachId, formatInTimeZone(todayInTimezone, 'UTC', 'yyyy-MM-dd HH:mm:ss')]);
         const bookedIntervals = bookedSlotsData.map(slot => ({
-            start: parseISO(slot.startTime), // Parse as ISO string, which date-fns handles as UTC if no timezone info
-            end: parseISO(slot.endTime)
+            start: slot.startTime, // Parse as ISO string, which date-fns handles as UTC if no timezone info
+            end: slot.endTime
         }));
         console.log(`Found ${bookedIntervals.length} future booked slots.`);
 
