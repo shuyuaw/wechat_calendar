@@ -66,133 +66,69 @@ const getCoachConfig = async (req, res) => {
 };
 
 // Update coach config - Converted to MySQL
+// MODIFICATION START: Replaced the entire updateCoachConfig function
 const updateCoachConfig = async (req, res) => {
     if (!checkCoachAuthorization(req, res)) return;
     const coachOpenId = req.user.openid;
-
     try {
         const { weeklyTemplate, sessionDurationMinutes } = req.body;
-
-        if (weeklyTemplate === undefined || sessionDurationMinutes === undefined) {
-            return res.status(400).json({ error: 'Missing required fields.' });
-        }
-        if (typeof sessionDurationMinutes !== 'number' || sessionDurationMinutes <= 0) {
-            return res.status(400).json({ error: 'sessionDurationMinutes must be a positive number.' });
-        }
-        if (typeof weeklyTemplate !== 'object' || weeklyTemplate === null || Array.isArray(weeklyTemplate)) {
-            return res.status(400).json({ error: 'weeklyTemplate must be a valid object.' });
-        }
-
         const weeklyTemplateString = JSON.stringify(weeklyTemplate);
-
-        // MySQL's "UPSERT" syntax
         const sql = `
-            INSERT INTO CoachConfig (coachId, weeklyTemplate, sessionDurationMinutes)
-            VALUES (?, ?, ?)
+            INSERT INTO CoachConfig (coachId, weeklyTemplate, sessionDurationMinutes) VALUES (?, ?, ?)
             ON DUPLICATE KEY UPDATE
-               weeklyTemplate = VALUES(weeklyTemplate),
-               sessionDurationMinutes = VALUES(sessionDurationMinutes)
-        `;
-
+            weeklyTemplate = VALUES(weeklyTemplate), sessionDurationMinutes = VALUES(sessionDurationMinutes)`;
         await pool.query(sql, [coachOpenId, weeklyTemplateString, sessionDurationMinutes]);
-        console.log(`Coach config saved/updated for coachId: ${coachOpenId}.`);
 
-        const regenResult = await regenerateAvailabilitySlots(coachOpenId, weeklyTemplate, sessionDurationMinutes);
-        console.log(`Slot regeneration completed. Generated: ${regenResult.slotsGenerated}, Skipped: ${regenResult.slotsSkipped}`);
+        await regenerateAvailabilitySlots(coachOpenId, weeklyTemplate, sessionDurationMinutes);
         res.status(200).json({ message: 'Configuration saved and slots regenerated successfully.' });
-
     } catch (error) {
         console.error("Error in updateCoachConfig:", error.message);
-        // Check if the error is from regeneration and tailor the message
-        if (error.message.includes('regenerate')) {
-             res.status(500).json({ error: 'Configuration saved, but failed to regenerate availability slots.' });
-        } else {
              res.status(500).json({ error: 'Failed to save coach configuration.' });
         }
-    }
 };
+// MODIFICATION END
 
 // Regenerate slots - Heavily modified for MySQL transactions and batch inserts
+// MODIFICATION START: Replaced the entire regenerateAvailabilitySlots function
 async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurationMinutes) {
-    console.log(`Regenerating slots for coachId: ${coachId}.`);
-    const WEEKS_TO_GENERATE = 8;
-    const TIMEZONE = process.env.TIMEZONE || 'Asia/Shanghai'; // Default to Asia/Shanghai if not set
-    
-    // Get current time in the specified timezone
-    const nowInTimezone = utcToZonedTime(new Date(), TIMEZONE);
-    const todayInTimezone = startOfDay(nowInTimezone);
-
-    // Convert current time to UTC for comparison with stored UTC times
-    const currentTimeUtc = zonedTimeToUtc(nowInTimezone, TIMEZONE);
-    
-    // Use a single connection for the entire transaction
+    const TIMEZONE = process.env.TIMEZONE || 'Asia/Shanghai';
     const connection = await pool.getConnection();
-    
     try {
         await connection.beginTransaction();
 
-        const fetchBookedSql = `
-            SELECT startTime, endTime FROM AvailabilitySlots
-            WHERE coachId = ? AND status = 'booked' AND startTime >= ?
-        `;
-        // Format today's start in UTC for the query
-        const [bookedSlotsData] = await connection.query(fetchBookedSql, [coachId, formatInTimeZone(todayInTimezone, 'UTC', 'yyyy-MM-dd HH:mm:ss')]);
+        const fetchBookedSql = `SELECT startTime, endTime FROM AvailabilitySlots WHERE coachId = ? AND status = 'booked' AND startTime >= ?`;
+        const [bookedSlotsData] = await connection.query(fetchBookedSql, [coachId, new Date()]);
+        
+        // FIX 1: Directly use Date objects from the database
         const bookedIntervals = bookedSlotsData.map(slot => ({
-            start: slot.startTime, // Parse as ISO string, which date-fns handles as UTC if no timezone info
+            start: slot.startTime,
             end: slot.endTime
         }));
-        console.log(`Found ${bookedIntervals.length} future booked slots.`);
 
         const deleteSql = `DELETE FROM AvailabilitySlots WHERE coachId = ? AND status = 'available'`;
-        const [deleteResult] = await connection.query(deleteSql, [coachId]);
-        console.log(`Deleted ${deleteResult.affectedRows} old available slots.`);
+        await connection.query(deleteSql, [coachId]);
 
-        let slotsGenerated = 0;
-        let slotsSkipped = 0;
-        const daysToGenerate = WEEKS_TO_GENERATE * 7;
-        const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const insertSlots = [];
+        const nowInTimezone = utcToZonedTime(new Date(), TIMEZONE);
+        const todayInTimezone = startOfDay(nowInTimezone);
+        const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-        for (let i = 0; i < daysToGenerate; i++) {
+        for (let i = 0; i < 56; i++) { // 8 weeks
             const currentDateInTimezone = addDays(todayInTimezone, i);
             const dayName = dayMapping[getDay(currentDateInTimezone)];
             const timeSlots = weeklyTemplate[dayName];
-
-            if (Array.isArray(timeSlots) && timeSlots.length > 0) {
+            if (Array.isArray(timeSlots)) {
                 for (const timeString of timeSlots) {
-                    try {
                         const [hour, minute] = timeString.split(':').map(Number);
-                        
-                        // Create slot start time in the specified timezone
-                        let slotStartTimeInTimezone = setMilliseconds(setSeconds(setMinutes(setHours(currentDateInTimezone, hour), minute), 0), 0);
-                        
-                        // Convert this timezone-specific time to UTC for storage and comparison
+                    const slotStartTimeInTimezone = setMilliseconds(setSeconds(setMinutes(setHours(currentDateInTimezone, hour), minute), 0), 0);
                         const slotStartTimeUtc = zonedTimeToUtc(slotStartTimeInTimezone, TIMEZONE);
 
-                        if (isAfter(slotStartTimeUtc, currentTimeUtc)) {
+                    if (isAfter(slotStartTimeUtc, new Date())) {
                             const slotEndTimeUtc = addMinutes(slotStartTimeUtc, sessionDurationMinutes);
-                            const isConflict = bookedIntervals.some(interval =>
-                                isBefore(slotStartTimeUtc, interval.end) && isAfter(slotEndTimeUtc, interval.start)
-                            );
-
+                        const isConflict = bookedIntervals.some(interval => isBefore(slotStartTimeUtc, interval.end) && isAfter(slotEndTimeUtc, interval.start));
                             if (!isConflict) {
-                                // Format for MySQL DATETIME column, ensuring it's UTC
-                                insertSlots.push([
-                                    coachId,
-                                    formatInTimeZone(slotStartTimeUtc, 'UTC', 'yyyy-MM-dd HH:mm:ss'),
-                                    formatInTimeZone(slotEndTimeUtc, 'UTC', 'yyyy-MM-dd HH:mm:ss'),
-                                    'available'
-                                ]);
-                                slotsGenerated++;
-                            } else {
-                                slotsSkipped++;
-                            }
-                        } else {
-                            slotsSkipped++;
+                            insertSlots.push([coachId, slotStartTimeUtc, slotEndTimeUtc, 'available']);
                         }
-                    } catch (timeErr) {
-                        console.error(`Error processing timeString "${timeString}"`, timeErr);
-                        slotsSkipped++;
                     }
                 }
             }
@@ -202,19 +138,16 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
             const insertSql = "INSERT INTO AvailabilitySlots (coachId, startTime, endTime, status) VALUES ?";
             await connection.query(insertSql, [insertSlots]);
         }
-
         await connection.commit();
-        console.log(`Slot generation transaction committed. Generated: ${slotsGenerated}, Skipped: ${slotsSkipped}.`);
-        return { slotsGenerated, slotsSkipped };
-
     } catch (error) {
         await connection.rollback();
-        console.error(`Critical error during slot regeneration for coach ${coachId}, transaction rolled back:`, error);
-        throw new Error('Failed to regenerate slots.'); // Propagate a clearer error
+        console.error(`Critical error during slot regeneration:`, error);
+        throw error;
     } finally {
         connection.release();
     }
 }
+// MODIFICATION END
 
 // Get coach bookings for a date - Converted to MySQL
 const getCoachBookingsForDate = async (req, res) => {
