@@ -1,5 +1,5 @@
 // backend/controllers/coach.controller.js
-const db = require('../database.js');
+const pool = require('../database.js'); // Use the new MySQL pool
 const {
     addDays,
     addMinutes,
@@ -15,395 +15,252 @@ const {
     isValid: isValidDate,
     startOfDay,
     endOfDay,
-    formatISO,
+    format: formatDate, // Use format for consistency
 } = require('date-fns');
 
-// --- Authorization Helper Function (Optional but Recommended) ---
-// You can keep the checks inline, or use a helper for cleaner code
+// Authorization Helper - no changes needed here
 const checkCoachAuthorization = (req, res) => {
-    const loggedInUserId = req.user?.openid; // Get OpenID from verified token (added by verifyToken middleware)
-    const designatedCoachId = process.env.COACH_OPENID; // Get Coach ID from config
+    const loggedInUserId = req.user?.openid;
+    const designatedCoachId = process.env.COACH_OPENID;
 
     if (!loggedInUserId) {
-        // This case should technically be caught by verifyToken middleware, but good to double-check
-        console.error("[AuthZ] No user OpenID found in request after verifyToken.");
         res.status(401).json({ error: "Unauthorized: Missing user identification." });
-        return false; // Indicate authorization failed
+        return false;
     }
-
     if (!designatedCoachId) {
         console.error("[AuthZ] COACH_OPENID is not configured in .env");
         res.status(500).json({ error: "Server configuration error." });
-        return false; // Indicate authorization failed
+        return false;
     }
-
     if (loggedInUserId !== designatedCoachId) {
-        console.warn(`[AuthZ] Forbidden attempt. User: ${loggedInUserId} is not the designated coach (${designatedCoachId}).`);
         res.status(403).json({ error: "Forbidden: You do not have permission to perform this action." });
-        return false; // Indicate authorization failed
+        return false;
     }
-
-    // If all checks pass
-    console.log(`[AuthZ] Access granted for coach: ${loggedInUserId}`);
-    return true; // Indicate authorization succeeded
+    return true;
 };
-// --- End Authorization Helper ---
 
-
-// Controller function to get coach config
+// Get coach config - Converted to MySQL
 const getCoachConfig = async (req, res) => {
-    // --- Authorization Check ---
-    if (!checkCoachAuthorization(req, res)) {
-        return; // Stop execution if authorization fails
-    }
-    // If authorization passes, req.user.openid is confirmed to be the coach's openid
-    const coachOpenId = req.user.openid; // Use the verified coach's openid
-    // --- End Authorization Check ---
+    if (!checkCoachAuthorization(req, res)) return;
+    const coachOpenId = req.user.openid;
 
     try {
-        // Use coachOpenId (which *is* the designated coach's ID) to potentially fetch config if needed,
-        // though for a single coach, LIMIT 1 might be sufficient. Let's keep LIMIT 1 for simplicity now.
-        const sql = "SELECT coachId, weeklyTemplate, sessionDurationMinutes FROM CoachConfig LIMIT 1";
-        db.get(sql, [], (err, row) => {
-            if (err) {
-                console.error("Database error getting coach config:", err.message);
-                return res.status(500).json({ error: 'Database error fetching configuration.' });
-            }
+        const sql = "SELECT coachId, weeklyTemplate, sessionDurationMinutes FROM CoachConfig WHERE coachId = ? LIMIT 1";
+        const [rows] = await pool.query(sql, [coachOpenId]);
 
-            if (!row) {
-                // Configuration might not exist yet, which could be okay.
-                // Consider returning default/empty state instead of 404 if first-time setup is allowed via PUT.
-                 console.log("Coach configuration not found in database.");
-                 return res.status(200).json({ coachId: coachOpenId, weeklyTemplate: null, sessionDurationMinutes: 60 }); // Example default
-                // return res.status(404).json({ error: 'Coach configuration not found.' });
-            }
+        if (rows.length === 0) {
+            console.log("Coach configuration not found in database. Returning default.");
+            return res.status(200).json({ coachId: coachOpenId, weeklyTemplate: null, sessionDurationMinutes: 60 });
+        }
 
-            let configData = { ...row };
-            try {
-                if (configData.weeklyTemplate && typeof configData.weeklyTemplate === 'string') { // Add type check
-                    configData.weeklyTemplate = JSON.parse(configData.weeklyTemplate);
-                } else if (!configData.weeklyTemplate) { // Handle null/empty template explicitly
-                    configData.weeklyTemplate = null;
-                }
-                 // Ensure the returned coachId matches the authenticated coach if the table stores it
-                 // configData.coachId = coachOpenId; // Optionally overwrite if needed
-            } catch (parseError) {
-                console.error("Error parsing weeklyTemplate JSON:", parseError.message);
-                return res.status(500).json({ error: 'Error processing configuration data.' });
-            }
-            res.status(200).json(configData);
-        });
+        let configData = rows[0];
+        if (configData.weeklyTemplate && typeof configData.weeklyTemplate === 'string') {
+            configData.weeklyTemplate = JSON.parse(configData.weeklyTemplate);
+        }
+        res.status(200).json(configData);
+
     } catch (error) {
-        console.error("Error in getCoachConfig controller:", error.message);
+        console.error("Error in getCoachConfig:", error.message);
         res.status(500).json({ error: 'Failed to retrieve coach configuration.' });
     }
 };
 
-// Controller function to update coach config
+// Update coach config - Converted to MySQL
 const updateCoachConfig = async (req, res) => {
-    // --- Authorization Check ---
-    if (!checkCoachAuthorization(req, res)) {
-        return; // Stop execution if authorization fails
-    }
-    // If authorization passes, req.user.openid is confirmed to be the coach's openid
+    if (!checkCoachAuthorization(req, res)) return;
     const coachOpenId = req.user.openid;
-    // --- End Authorization Check ---
 
     try {
-        // IMPORTANT: Use the *verified* coachOpenId from the token, ignore any coachId potentially passed in the body for security.
         const { weeklyTemplate, sessionDurationMinutes } = req.body;
 
-        // --- Input Validation ---
-        // Note: We no longer need coachId from the body, we use the verified one.
         if (weeklyTemplate === undefined || sessionDurationMinutes === undefined) {
-            return res.status(400).json({ error: 'Missing required configuration fields (weeklyTemplate, sessionDurationMinutes).' });
+            return res.status(400).json({ error: 'Missing required fields.' });
         }
         if (typeof sessionDurationMinutes !== 'number' || sessionDurationMinutes <= 0) {
             return res.status(400).json({ error: 'sessionDurationMinutes must be a positive number.' });
         }
-        // Basic validation for weeklyTemplate structure (can be enhanced)
-        if (typeof weeklyTemplate !== 'object' || weeklyTemplate === null || Array.isArray(weeklyTemplate)) { // Ensure it's an object, not array
-            return res.status(400).json({ error: 'weeklyTemplate must be a valid object mapping day names to time arrays.' });
-        }
-        // Add validation for days and time formats within weeklyTemplate if needed
-        // --- End Validation ---
-
-        let weeklyTemplateString;
-        try {
-            weeklyTemplateString = JSON.stringify(weeklyTemplate);
-        } catch (stringifyError) {
-            console.error("Error stringifying weeklyTemplate:", stringifyError.message);
-            return res.status(400).json({ error: 'Invalid weeklyTemplate JSON format.' });
+        if (typeof weeklyTemplate !== 'object' || weeklyTemplate === null || Array.isArray(weeklyTemplate)) {
+            return res.status(400).json({ error: 'weeklyTemplate must be a valid object.' });
         }
 
-        // --- Database Upsert ---
-        // Use the verified coachOpenId here
+        const weeklyTemplateString = JSON.stringify(weeklyTemplate);
+
+        // MySQL's "UPSERT" syntax
         const sql = `
             INSERT INTO CoachConfig (coachId, weeklyTemplate, sessionDurationMinutes)
             VALUES (?, ?, ?)
-            ON CONFLICT(coachId) DO UPDATE SET
-               weeklyTemplate=excluded.weeklyTemplate,
-               sessionDurationMinutes=excluded.sessionDurationMinutes
+            ON DUPLICATE KEY UPDATE
+               weeklyTemplate = VALUES(weeklyTemplate),
+               sessionDurationMinutes = VALUES(sessionDurationMinutes)
         `;
 
-        db.run(sql, [coachOpenId, weeklyTemplateString, sessionDurationMinutes], async function (err) { // Use coachOpenId
-            if (err) {
-                console.error("Database error upserting coach config:", err.message);
-                return res.status(500).json({ error: 'Database error saving configuration.' });
-            }
+        await pool.query(sql, [coachOpenId, weeklyTemplateString, sessionDurationMinutes]);
+        console.log(`Coach config saved/updated for coachId: ${coachOpenId}.`);
 
-            console.log(`Coach config saved/updated for coachId: ${coachOpenId}. Rows affected: ${this.changes}`);
-
-            // --- Trigger Slot Regeneration ---
-            try {
-                // Pass the verified coachOpenId
-                const regenResult = await regenerateAvailabilitySlots(coachOpenId, weeklyTemplate, sessionDurationMinutes);
-                console.log(`Slot regeneration completed. Slots generated: ${regenResult.slotsGenerated}, Skipped: ${regenResult.slotsSkipped}`);
-                res.status(200).json({ message: 'Configuration saved and slots regenerated successfully.' });
-            } catch (regenError) {
-                console.error("Error during slot regeneration:", regenError);
-                res.status(500).json({ error: 'Configuration saved, but failed to regenerate availability slots.' });
-            }
-            // --- End Slot Regeneration ---
-        });
-        // --- End Database ---
+        const regenResult = await regenerateAvailabilitySlots(coachOpenId, weeklyTemplate, sessionDurationMinutes);
+        console.log(`Slot regeneration completed. Generated: ${regenResult.slotsGenerated}, Skipped: ${regenResult.slotsSkipped}`);
+        res.status(200).json({ message: 'Configuration saved and slots regenerated successfully.' });
 
     } catch (error) {
-        console.error("Error in updateCoachConfig controller:", error.message);
-        res.status(500).json({ error: 'Failed to save coach configuration.' });
+        console.error("Error in updateCoachConfig:", error.message);
+        // Check if the error is from regeneration and tailor the message
+        if (error.message.includes('regenerate')) {
+             res.status(500).json({ error: 'Configuration saved, but failed to regenerate availability slots.' });
+        } else {
+             res.status(500).json({ error: 'Failed to save coach configuration.' });
+        }
     }
 };
 
-
-// START: MODIFIED FUNCTION
+// Regenerate slots - Heavily modified for MySQL transactions and batch inserts
 async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurationMinutes) {
     console.log(`Regenerating slots for coachId: ${coachId}.`);
     const WEEKS_TO_GENERATE = 8;
     const today = startOfDay(new Date());
-    const currentTime = new Date(); // Get the current time for the future-only check
-    const todayISO = formatISO(today);
-
-    // Promisify db functions to use async/await cleanly
-    const dbAll = (sql, params) => new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
-    });
-    const dbRun = (sql, params) => new Promise((resolve, reject) => {
-        db.run(sql, params, function(err) { err ? reject(err) : resolve(this) });
-    });
-
+    const currentTime = new Date();
+    
+    // Use a single connection for the entire transaction
+    const connection = await pool.getConnection();
+    
     try {
-        // --- Step 1: Fetch all future booked slots to avoid conflicts ---
-        console.log(`Fetching future booked slots from ${todayISO} onwards for coach ${coachId}...`);
+        await connection.beginTransaction();
+
         const fetchBookedSql = `
             SELECT startTime, endTime FROM AvailabilitySlots
             WHERE coachId = ? AND status = 'booked' AND startTime >= ?
         `;
-        const bookedSlotsData = await dbAll(fetchBookedSql, [coachId, todayISO]);
+        const [bookedSlotsData] = await connection.query(fetchBookedSql, [coachId, formatDate(today, 'yyyy-MM-dd HH:mm:ss')]);
         const bookedIntervals = bookedSlotsData.map(slot => ({
             start: parseISO(slot.startTime),
             end: parseISO(slot.endTime)
         }));
-        console.log(`Found ${bookedIntervals.length} future booked slots to check against.`);
+        console.log(`Found ${bookedIntervals.length} future booked slots.`);
 
-        // --- Step 2: Delete ALL existing 'available' slots for the coach ---
-        console.log(`Deleting ALL available (unbooked) slots for coach ${coachId}...`);
-                    const deleteSql = `
-                        DELETE FROM AvailabilitySlots
-            WHERE coachId = ? AND status = 'available'
-        `;
-        // The startTime check is removed to delete all available slots, not just future ones.
-        const deleteResult = await dbRun(deleteSql, [coachId]);
-        console.log(`Deleted ${deleteResult.changes} old available slots.`);
+        const deleteSql = `DELETE FROM AvailabilitySlots WHERE coachId = ? AND status = 'available'`;
+        const [deleteResult] = await connection.query(deleteSql, [coachId]);
+        console.log(`Deleted ${deleteResult.affectedRows} old available slots.`);
 
-
-        // --- Step 3: Generate and insert new slots ---
-        console.log(`Generating new slots for the next ${WEEKS_TO_GENERATE} weeks...`);
-                    let slotsGenerated = 0;
-        let slotsSkipped = 0; // Covers past slots, conflicts, and other errors
-                    const daysToGenerate = WEEKS_TO_GENERATE * 7;
-                    const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        let slotsGenerated = 0;
+        let slotsSkipped = 0;
+        const daysToGenerate = WEEKS_TO_GENERATE * 7;
+        const dayMapping = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const insertSlots = [];
 
-                    for (let i = 0; i < daysToGenerate; i++) {
-                        const currentDate = addDays(today, i);
+        for (let i = 0; i < daysToGenerate; i++) {
+            const currentDate = addDays(today, i);
             const dayName = dayMapping[getDay(currentDate)];
             const timeSlots = weeklyTemplate[dayName];
 
             if (Array.isArray(timeSlots) && timeSlots.length > 0) {
-                            for (const timeString of timeSlots) {
-                                try {
-                                    const [hour, minute] = timeString.split(':').map(Number);
-                                    const slotStartTime = setMilliseconds(setSeconds(setMinutes(setHours(currentDate, hour), minute), 0), 0);
+                for (const timeString of timeSlots) {
+                    try {
+                        const [hour, minute] = timeString.split(':').map(Number);
+                        const slotStartTime = setMilliseconds(setSeconds(setMinutes(setHours(currentDate, hour), minute), 0), 0);
 
-                        // --- FUTURE CHECK: Only generate slots that start after the current time ---
                         if (isAfter(slotStartTime, currentTime)) {
-                                    const slotEndTime = addMinutes(slotStartTime, sessionDurationMinutes);
-
-                        // Check for conflicts with already booked slots
+                            const slotEndTime = addMinutes(slotStartTime, sessionDurationMinutes);
                             const isConflict = bookedIntervals.some(interval =>
-                            isBefore(slotStartTime, interval.end) && isAfter(slotEndTime, interval.start)
-                        );
+                                isBefore(slotStartTime, interval.end) && isAfter(slotEndTime, interval.start)
+                            );
 
-                                    if (!isConflict) {
-                            insertSlots.push({
-                                coachId: coachId,
-                                startTime: formatISO(slotStartTime),
-                                endTime: formatISO(slotEndTime)
-                            });
-                            slotsGenerated++;
-                        } else {
-                                // This slot conflicts with a booked one, so skip it.
+                            if (!isConflict) {
+                                // Format for MySQL DATETIME column
+                                insertSlots.push([
+                                    coachId,
+                                    formatDate(slotStartTime, 'yyyy-MM-dd HH:mm:ss'),
+                                    formatDate(slotEndTime, 'yyyy-MM-dd HH:mm:ss'),
+                                    'available'
+                                ]);
+                                slotsGenerated++;
+                            } else {
                                 slotsSkipped++;
                             }
                         } else {
-                            // This slot is in the past, so skip it.
                             slotsSkipped++;
-                                    }
-                                } catch (timeErr) {
+                        }
+                    } catch (timeErr) {
                         console.error(`Error processing timeString "${timeString}"`, timeErr);
                         slotsSkipped++;
-                                }
-                            }
+                    }
+                }
             }
         }
 
-        // --- Step 4: Batch insert the new slots in a transaction ---
         if (insertSlots.length > 0) {
-            await dbRun('BEGIN TRANSACTION;');
-            try {
-                const stmt = db.prepare("INSERT INTO AvailabilitySlots (coachId, startTime, endTime, status) VALUES (?, ?, ?, 'available')");
-                for (const slot of insertSlots) {
-                    await new Promise((resolve, reject) => {
-                        stmt.run(slot.coachId, slot.startTime, slot.endTime, err => err ? reject(err) : resolve());
-                    });
-                }
-                stmt.finalize();
-                await dbRun('COMMIT;');
-            } catch(batchInsertError) {
-                console.error("Error during batch insert, rolling back.", batchInsertError);
-                await dbRun('ROLLBACK;');
-                throw batchInsertError; // Propagate error
-                              }
+            const insertSql = "INSERT INTO AvailabilitySlots (coachId, startTime, endTime, status) VALUES ?";
+            await connection.query(insertSql, [insertSlots]);
         }
-        
-        console.log(`Slot generation complete. Generated: ${slotsGenerated}, Skipped: ${slotsSkipped}.`);
+
+        await connection.commit();
+        console.log(`Slot generation transaction committed. Generated: ${slotsGenerated}, Skipped: ${slotsSkipped}.`);
         return { slotsGenerated, slotsSkipped };
 
     } catch (error) {
-        console.error(`Critical error during slot regeneration for coach ${coachId}:`, error.stack);
-        throw error;
+        await connection.rollback();
+        console.error(`Critical error during slot regeneration for coach ${coachId}, transaction rolled back:`, error);
+        throw new Error('Failed to regenerate slots.'); // Propagate a clearer error
+    } finally {
+        connection.release();
     }
 }
-// END: MODIFIED FUNCTION
 
-
-// Controller function for the coach to get confirmed bookings for a specific date
+// Get coach bookings for a date - Converted to MySQL
 const getCoachBookingsForDate = async (req, res) => {
-    // --- Authorization Check ---
-    if (!checkCoachAuthorization(req, res)) {
-        return; // Stop execution if authorization fails
-    }
-    // If authorization passes, req.user.openid is confirmed to be the coach's openid
+    if (!checkCoachAuthorization(req, res)) return;
     const coachOpenId = req.user.openid;
-    // --- End Authorization Check ---
+    const { date } = req.query;
 
-    const requestedDate = req.query.date;
-
-    // --- Validate Input Date ---
-    if (!requestedDate) {
+    if (!date) {
         return res.status(400).json({ error: 'Missing required query parameter: date (YYYY-MM-DD).' });
     }
-    const parsedDate = parseDate(requestedDate, 'yyyy-MM-dd', new Date());
+    const parsedDate = parseDate(date, 'yyyy-MM-dd', new Date());
     if (!isValidDate(parsedDate)) {
         return res.status(400).json({ error: 'Invalid date format. Please use YYYY-MM-DD.' });
     }
-    // --- End Validation ---
 
-    // --- Calculate Date Range ---
-    const dayStart = startOfDay(parsedDate);
-    const dayEnd = endOfDay(parsedDate);
-    const startTimeQuery = formatISO(dayStart);
-    const endTimeQuery = formatISO(dayEnd);
-    // --- End Date Range ---
+    const startTimeQuery = formatDate(startOfDay(parsedDate), 'yyyy-MM-dd HH:mm:ss');
+    const endTimeQuery = formatDate(endOfDay(parsedDate), 'yyyy-MM-dd HH:mm:ss');
 
     try {
-        // --- Database Query ---
-        // Use the verified coachOpenId in the WHERE clause
         const sql = `
-            SELECT
-                b.bookingId, b.slotId, b.startTime, b.endTime,
-                b.status, b.userId, u.nickName AS userNickName
+            SELECT b.bookingId, b.slotId, b.startTime, b.endTime, b.status, b.userId, u.nickName AS userNickName
             FROM Bookings b
             LEFT JOIN Users u ON b.userId = u.userId
-            WHERE b.coachId = ?
-              AND b.startTime >= ?
-              AND b.startTime <= ?
-              AND b.status = 'confirmed'
+            WHERE b.coachId = ? AND b.startTime >= ? AND b.startTime <= ? AND b.status = 'confirmed'
             ORDER BY b.startTime ASC
         `;
-
-        console.log(`Querying confirmed bookings for coach ${coachOpenId} on ${requestedDate}`);
-
-        // Use verified coachOpenId in the query parameters
-        db.all(sql, [coachOpenId, startTimeQuery, endTimeQuery], (err, rows) => {
-            if (err) {
-                console.error(`Database error fetching coach bookings for date ${requestedDate}:`, err.message);
-                return res.status(500).json({ error: 'Database error fetching bookings.' });
-            }
-            res.status(200).json(rows || []);
-        });
-        // --- End Database Query ---
-
+        const [rows] = await pool.query(sql, [coachOpenId, startTimeQuery, endTimeQuery]);
+        res.status(200).json(rows);
     } catch (error) {
-        console.error(`Error in getCoachBookingsForDate controller for date ${requestedDate}:`, error.message);
+        console.error(`Error in getCoachBookingsForDate:`, error.message);
         res.status(500).json({ error: 'Failed to retrieve coach bookings.' });
     }
 };
 
-// Controller function for the coach to get all confirmed bookings
+// Get all coach bookings - Converted to MySQL
 const getAllCoachBookings = async (req, res) => {
-    // --- Authorization Check ---
-    if (!checkCoachAuthorization(req, res)) {
-        return; // Stop execution if authorization fails
-    }
+    if (!checkCoachAuthorization(req, res)) return;
     const coachOpenId = req.user.openid;
-    // --- End Authorization Check ---
 
     try {
-        // --- Database Query ---
         const sql = `
-            SELECT
-                b.bookingId, b.slotId, b.startTime, b.endTime,
-                b.status, b.userId, u.nickName AS userNickName
+            SELECT b.bookingId, b.slotId, b.startTime, b.endTime, b.status, b.userId, u.nickName AS userNickName
             FROM Bookings b
             LEFT JOIN Users u ON b.userId = u.userId
-            WHERE b.coachId = ?
-              AND b.status = 'confirmed'
+            WHERE b.coachId = ? AND b.status = 'confirmed'
             ORDER BY b.startTime ASC
         `;
-
-        console.log(`Querying all confirmed bookings for coach ${coachOpenId}`);
-
-        db.all(sql, [coachOpenId], (err, rows) => {
-            if (err) {
-                console.error(`Database error fetching all coach bookings:`, err.message);
-                return res.status(500).json({ error: 'Database error fetching bookings.' });
-            }
-            res.status(200).json(rows || []);
-        });
-        // --- End Database Query ---
-
+        const [rows] = await pool.query(sql, [coachOpenId]);
+        res.status(200).json(rows);
     } catch (error) {
-        console.error(`Error in getAllCoachBookings controller:`, error.message);
+        console.error(`Error in getAllCoachBookings:`, error.message);
         res.status(500).json({ error: 'Failed to retrieve all coach bookings.' });
     }
 };
-
 
 module.exports = {
     getCoachConfig,
     updateCoachConfig,
     getCoachBookingsForDate,
     getAllCoachBookings,
-    // Note: regenerateAvailabilitySlots is internal and not exported
 };
