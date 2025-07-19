@@ -108,7 +108,7 @@ Page({
     // MUST use the authenticated user's ID (e.g., req.user.openid)
     // to fetch the correct bookings.
     request({
-      url: '/api/bookings/mine/upcoming', // Relative path, base URL is in request.js
+      url: '/bookings/mine/upcoming', // Relative path, base URL is in request.js
       method: 'GET'
       // requiresAuth defaults to true in the request utility, so token will be sent
     })
@@ -208,7 +208,7 @@ Page({
     this.setData({ isLoading: true }); // Optional: use page loading state for more feedback
 
     request({
-      url: `/api/bookings/${bookingId}`, // Relative path; bookingId is part of the path
+      url: `/bookings/${bookingId}`, // Relative path; bookingId is part of the path
       method: 'DELETE'
     })
     .then(response => { 

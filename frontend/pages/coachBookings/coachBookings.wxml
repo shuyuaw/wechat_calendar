@@ -11,6 +11,7 @@
     <view class="button-group">
       <button size="mini" type="default" class="nav-button-config" bindtap="goToConfigPage">设置周模版</button>
       <button size="mini" type="primary" bindtap="showAllFutureBookings">显示所有未来预约</button>
+      <button class="test-button" bindtap="goToStudentView">Test Student View</button>
     </view>
   </view>
 

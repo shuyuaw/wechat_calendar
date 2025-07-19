@@ -95,3 +95,8 @@ button[type="default"] {
   padding-top: calc(env(safe-area-inset-top) + 20rpx);
   box-sizing: border-box;
 }
+
+.test-button {
+  margin: 20rpx;
+  background-color: #f0f0f0;
+}

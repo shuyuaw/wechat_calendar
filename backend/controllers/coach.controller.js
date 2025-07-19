@@ -131,8 +131,8 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
         `;
         const [bookedSlotsData] = await connection.query(fetchBookedSql, [coachId, formatDate(today, 'yyyy-MM-dd HH:mm:ss')]);
         const bookedIntervals = bookedSlotsData.map(slot => ({
-            start: parseISO(slot.startTime),
-            end: parseISO(slot.endTime)
+            start: slot.startTime,
+            end: slot.endTime
         }));
         console.log(`Found ${bookedIntervals.length} future booked slots.`);
 

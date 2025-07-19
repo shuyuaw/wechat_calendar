@@ -1,168 +1,120 @@
+// frontend/pages/coachBookings/coachBookings.js
 const { request } = require('../../utils/request.js');
 const app = getApp();
+
 const formatDate = (date) => {
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
-const DESIGNATED_COACH_OPENID = 'oc5am7UF8nlgd-3LxJQrgMG84ews';
 
 Page({
-  data: {
-    selectedDate: formatDate(new Date()),
-    bookings: [],
-    isLoading: false,
-    errorMsg: null,
-    isCoach: false,
-    openid: null,
-    showAll: false
-  },
+    data: {
+        selectedDate: formatDate(new Date()),
+        bookings: [],
+        isLoading: false,
+        errorMsg: null,
+        isCoach: false, // We will rely on backend authorization
+        showAll: false
+    },
 
-  onLoad(options) {
-    console.log('[coachBookings.js] Page loaded.'); // ADDED
-    if (app.globalData.openid) {
-      console.log('[coachBookings.js] OpenID was already available.'); // ADDED
-      this.checkAuthorization(app.globalData.openid);
-    } else {
-      console.log('[coachBookings.js] OpenID not ready. Setting a callback.'); // ADDED
-      app.openidReadyCallback = openid => {
-        console.log('[coachBookings.js] openidReadyCallback has been executed.'); // ADDED
-        if (openid) {
-          this.checkAuthorization(openid);
+    onLoad(options) {
+        // We will fetch data in onShow, as it runs every time the page is displayed
+    },
+
+    onShow() {
+        // onShow is better for fetching data that might change
+        this.fetchBookings();
+    },
+
+    fetchBookings(all = false) {
+        this.setData({ isLoading: true, errorMsg: null, bookings: [] });
+        
+        // --- FIXED: Removed /api prefix from URLs ---
+        let url = all ? '/coach/all-bookings' : '/coach/bookings';
+        const dateToFetch = all ? null : this.data.selectedDate;
+
+        if (dateToFetch) {
+            console.log(`Fetching bookings for date: ${dateToFetch}.`);
+            url += `?date=${dateToFetch}`;
         } else {
-          this.handleAuthorizationFailure("登录失败");
+            console.log('Fetching all bookings.');
         }
-      };
-    }
-  },
 
-  checkAuthorization(openid) {
-    console.log("Current User's OpenID:", openid); 
-    if (openid === DESIGNATED_COACH_OPENID) {
-      this.setData({
-        isCoach: true,
-        openid: openid
-      });
-      this.fetchBookings();
-    } else {
-      this.handleAuthorizationFailure("您没有权限查看此页面");
-    }
-  },
+        request({
+            url: url,
+            method: 'GET',
+        })
+        .then(apiResponseBookings => {
+            // Check if the user is authorized based on a successful response
+            this.setData({ isCoach: true }); 
+            
+            const logDate = dateToFetch || 'all dates';
+            console.log(`Received API response for bookings on ${logDate}.`);
 
-  handleAuthorizationFailure(message) {
-    this.setData({
-      isLoading: false,
-      errorMsg: message,
-      isCoach: false,
-      bookings: []
-    });
-    wx.showToast({
-      title: message,
-      icon: 'none',
-      duration: 2000
-    });
-  },
+            if (Array.isArray(apiResponseBookings)) {
+                let bookingsToDisplay = apiResponseBookings;
 
-  fetchBookings(all = false) {
-    if (!this.data.isCoach) {
-      console.warn("fetchBookings called without authorization flag set.");
-      return;
-    }
-    this.setData({ isLoading: true, errorMsg: null, bookings: [] });
-    let url = all ? '/api/coach/all-bookings' : '/api/coach/bookings';
-    const dateToFetch = all ? null : this.data.selectedDate;
+                if (all) {
+                    const now = new Date();
+                    bookingsToDisplay = apiResponseBookings.filter(booking => new Date(booking.startTime) >= now);
+                }
 
-    if (dateToFetch) {
-      console.log(`Fetching bookings for date: ${dateToFetch}.`);
-      url += `?date=${dateToFetch}`;
-    } else {
-      console.log('Fetching all bookings.');
-    }
+                const formattedBookings = bookingsToDisplay.map(booking => {
+                    const startTimeShort = booking.startTime ? booking.startTime.substring(11, 16) : 'N/A';
+                    const endTimeShort = booking.endTime ? booking.endTime.substring(11, 16) : 'N/A';
+                    const displayDate = booking.startTime ? booking.startTime.substring(0, 10) : 'N/A';
+                    return { ...booking, displayStartTime: startTimeShort, displayEndTime: endTimeShort, displayDate: displayDate };
+                });
 
-    request({
-      url: url,
-      method: 'GET',
-    })
-    .then(apiResponseBookings => {
-      const logDate = dateToFetch || 'all dates';
-      console.log(`Received API response for bookings on ${logDate}. Count: ${Array.isArray(apiResponseBookings) ? apiResponseBookings.length : 'N/A (not an array)'}`);
-
-
-    if (Array.isArray(apiResponseBookings)) {
-      let bookingsToDisplay = apiResponseBookings;
-
-      if (all) {
-        const now = new Date();
-        bookingsToDisplay = apiResponseBookings.filter(booking => {
-          const bookingStartTime = new Date(booking.startTime);
-          return bookingStartTime >= now;
+                this.setData({
+                    bookings: formattedBookings,
+                    isLoading: false
+                });
+            } else {
+                this.setData({ isLoading: false, errorMsg: '返回数据格式错误', bookings: [] });
+            }
+        })
+        .catch(err => {
+            console.error(`Failed to fetch coach bookings:`, err);
+            // If the error is 403, it means the user is not the coach
+            const errorMessage = err.statusCode === 403 ? '您没有权限查看此页面' : (err.message || '加载预约失败');
+            this.setData({
+                isLoading: false,
+                errorMsg: errorMessage,
+                isCoach: false // Set isCoach to false on auth failure
+            });
         });
-      }
+    },
 
-      const formattedBookings = bookingsToDisplay.map(booking => {
-        const startTimeShort = booking.startTime ? booking.startTime.substring(11, 16) : 'N/A';
-        const endTimeShort = booking.endTime ? booking.endTime.substring(11, 16) : 'N/A';
-        const displayDate = booking.startTime ? booking.startTime.substring(0, 10) : 'N/A';
-        return {
-          ...booking,
-          displayStartTime: startTimeShort,
-          displayEndTime: endTimeShort,
-          displayDate: displayDate
-        };
-      });
-
-        console.log(`Successfully fetched and formatted ${formattedBookings.length} bookings for ${logDate}.`); // MODIFIED (from Log 11)
-          this.setData({
-          bookings: formattedBookings,
-            isLoading: false
-          });
-        } else {
-        console.error(`Invalid data format received for bookings on ${logDate}:`, apiResponseBookings); // MODIFIED (from Log 13) to include date
-      this.setData({ isLoading: false, errorMsg: '返回数据格式错误', bookings: [] });
-        }
-      })
-      .catch(err => {
-        const logDate = dateToFetch || 'all dates';
-      console.error(`Failed to fetch bookings for date ${logDate}:`, err); // MODIFIED (from Log 14) to include date
+    onDateChange(event) {
+        const newDate = event.detail.value;
         this.setData({
-          isLoading: false,
-        errorMsg: err.message || '加载预约失败'
+            selectedDate: newDate,
+            showAll: false
         });
-      });
-  },
-
-  onDateChange(event) {
-    if (event && event.detail) {
-    const newDate = event.detail.value;
-
-    this.setData({
-      selectedDate: newDate,
-      showAll: false
-    });
-
-      if (this.data.isCoach) {
         this.fetchBookings(false);
-      } else {
-        console.warn('Not calling fetchBookings in onDateChange because user is not authorized.'); // Log 5 - KEPT (context improved)
-      }
-    } else {
-      console.error('onDateChange triggered but event or event.detail is undefined.'); // Log 6 - KEPT
+    },
+
+    showAllFutureBookings() {
+        this.setData({
+            showAll: true,
+            selectedDate: '所有未来预约'
+        });
+        this.fetchBookings(true);
+    },
+
+    // Add this new function
+    goToStudentView: function() {
+        wx.navigateTo({
+          url: '/pages/index/index',
+        })
+    },
+
+    goToConfigPage() {
+        wx.navigateTo({
+            url: '/pages/coachConfig/coachConfig'
+        });
     }
-  },
-
-  showAllFutureBookings() {
-    this.setData({
-      showAll: true,
-      selectedDate: '所有未来预约'
-    });
-    this.fetchBookings(true);
-  },
-
-  goToConfigPage() {
-    wx.navigateTo({
-      url: '/pages/coachConfig/coachConfig'
-    });
-  }
-  // ... other methods like onCancelBooking if present ...
 });
