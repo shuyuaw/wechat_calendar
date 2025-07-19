@@ -8,15 +8,16 @@ const {
     setMinutes,
     setSeconds,
     setMilliseconds,
-    parseISO,
     isBefore,
     isAfter,
+    parseISO,
     parse: parseDate,
     isValid: isValidDate,
     startOfDay,
     endOfDay,
     format: formatDate, // Use format for consistency
 } = require('date-fns');
+const { utcToZonedTime, zonedTimeToUtc, formatInTimeZone } = require('date-fns-tz');
 
 // Authorization Helper - no changes needed here
 const checkCoachAuthorization = (req, res) => {
@@ -116,8 +117,14 @@ const updateCoachConfig = async (req, res) => {
 async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurationMinutes) {
     console.log(`Regenerating slots for coachId: ${coachId}.`);
     const WEEKS_TO_GENERATE = 8;
-    const today = startOfDay(new Date());
-    const currentTime = new Date();
+    const TIMEZONE = process.env.TIMEZONE || 'Asia/Shanghai'; // Default to Asia/Shanghai if not set
+    
+    // Get current time in the specified timezone
+    const nowInTimezone = utcToZonedTime(new Date(), TIMEZONE);
+    const todayInTimezone = startOfDay(nowInTimezone);
+
+    // Convert current time to UTC for comparison with stored UTC times
+    const currentTimeUtc = zonedTimeToUtc(nowInTimezone, TIMEZONE);
     
     // Use a single connection for the entire transaction
     const connection = await pool.getConnection();
@@ -129,10 +136,11 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
             SELECT startTime, endTime FROM AvailabilitySlots
             WHERE coachId = ? AND status = 'booked' AND startTime >= ?
         `;
-        const [bookedSlotsData] = await connection.query(fetchBookedSql, [coachId, formatDate(today, 'yyyy-MM-dd HH:mm:ss')]);
+        // Format today's start in UTC for the query
+        const [bookedSlotsData] = await connection.query(fetchBookedSql, [coachId, formatInTimeZone(todayInTimezone, 'UTC', 'yyyy-MM-dd HH:mm:ss')]);
         const bookedIntervals = bookedSlotsData.map(slot => ({
-            start: slot.startTime,
-            end: slot.endTime
+            start: parseISO(slot.startTime), // Parse as ISO string, which date-fns handles as UTC if no timezone info
+            end: parseISO(slot.endTime)
         }));
         console.log(`Found ${bookedIntervals.length} future booked slots.`);
 
@@ -147,28 +155,33 @@ async function regenerateAvailabilitySlots(coachId, weeklyTemplate, sessionDurat
         const insertSlots = [];
 
         for (let i = 0; i < daysToGenerate; i++) {
-            const currentDate = addDays(today, i);
-            const dayName = dayMapping[getDay(currentDate)];
+            const currentDateInTimezone = addDays(todayInTimezone, i);
+            const dayName = dayMapping[getDay(currentDateInTimezone)];
             const timeSlots = weeklyTemplate[dayName];
 
             if (Array.isArray(timeSlots) && timeSlots.length > 0) {
                 for (const timeString of timeSlots) {
                     try {
                         const [hour, minute] = timeString.split(':').map(Number);
-                        const slotStartTime = setMilliseconds(setSeconds(setMinutes(setHours(currentDate, hour), minute), 0), 0);
+                        
+                        // Create slot start time in the specified timezone
+                        let slotStartTimeInTimezone = setMilliseconds(setSeconds(setMinutes(setHours(currentDateInTimezone, hour), minute), 0), 0);
+                        
+                        // Convert this timezone-specific time to UTC for storage and comparison
+                        const slotStartTimeUtc = zonedTimeToUtc(slotStartTimeInTimezone, TIMEZONE);
 
-                        if (isAfter(slotStartTime, currentTime)) {
-                            const slotEndTime = addMinutes(slotStartTime, sessionDurationMinutes);
+                        if (isAfter(slotStartTimeUtc, currentTimeUtc)) {
+                            const slotEndTimeUtc = addMinutes(slotStartTimeUtc, sessionDurationMinutes);
                             const isConflict = bookedIntervals.some(interval =>
-                                isBefore(slotStartTime, interval.end) && isAfter(slotEndTime, interval.start)
+                                isBefore(slotStartTimeUtc, interval.end) && isAfter(slotEndTimeUtc, interval.start)
                             );
 
                             if (!isConflict) {
-                                // Format for MySQL DATETIME column
+                                // Format for MySQL DATETIME column, ensuring it's UTC
                                 insertSlots.push([
                                     coachId,
-                                    formatDate(slotStartTime, 'yyyy-MM-dd HH:mm:ss'),
-                                    formatDate(slotEndTime, 'yyyy-MM-dd HH:mm:ss'),
+                                    formatInTimeZone(slotStartTimeUtc, 'UTC', 'yyyy-MM-dd HH:mm:ss'),
+                                    formatInTimeZone(slotEndTimeUtc, 'UTC', 'yyyy-MM-dd HH:mm:ss'),
                                     'available'
                                 ]);
                                 slotsGenerated++;

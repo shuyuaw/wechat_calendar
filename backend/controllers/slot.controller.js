@@ -5,9 +5,10 @@ const {
   isValid: isValidDate,
   startOfDay,
   endOfDay,
-  format: formatDate, // Use format for consistency
   addDays,
+  parseISO, // Import parseISO
 } = require('date-fns');
+const { formatInTimeZone } = require('date-fns-tz'); // Import formatInTimeZone
 
 // Get slots for a specific date
 const getSlotsForDate = async (req, res) => {
@@ -21,8 +22,13 @@ const getSlotsForDate = async (req, res) => {
     return res.status(400).json({ error: 'Invalid date format. Please use YYYY-MM-DD.' });
   }
 
-  const startTimeQuery = formatDate(startOfDay(parsedDate), 'yyyy-MM-dd HH:mm:ss');
-  const endTimeQuery = formatDate(endOfDay(parsedDate), 'yyyy-MM-dd HH:mm:ss');
+  const TIMEZONE = process.env.TIMEZONE || 'Asia/Shanghai'; // Use the same timezone as coach.controller
+  const startOfDayInTimezone = startOfDay(parsedDate);
+  const endOfDayInTimezone = endOfDay(parsedDate);
+
+  // Convert to UTC for database query
+  const startTimeQuery = formatInTimeZone(startOfDayInTimezone, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+  const endTimeQuery = formatInTimeZone(endOfDayInTimezone, 'UTC', 'yyyy-MM-dd HH:mm:ss');
 
   const coachId = process.env.COACH_OPENID;
   if (!coachId) {
@@ -56,8 +62,13 @@ const getSlotsForWeek = async (req, res) => {
     return res.status(400).json({ error: 'Invalid startDate format. Please use yyyy-MM-dd.' });
   }
 
-  const queryRangeStart = formatDate(startOfDay(parsedStartDate), 'yyyy-MM-dd HH:mm:ss');
-  const queryRangeEnd = formatDate(endOfDay(addDays(parsedStartDate, 6)), 'yyyy-MM-dd HH:mm:ss');
+  const TIMEZONE = process.env.TIMEZONE || 'Asia/Shanghai'; // Use the same timezone as coach.controller
+  const startOfRangeInTimezone = startOfDay(parsedStartDate);
+  const endOfRangeInTimezone = endOfDay(addDays(parsedStartDate, 6));
+
+  // Convert to UTC for database query
+  const queryRangeStart = formatInTimeZone(startOfRangeInTimezone, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+  const queryRangeEnd = formatInTimeZone(endOfRangeInTimezone, 'UTC', 'yyyy-MM-dd HH:mm:ss');
 
   const coachId = process.env.COACH_OPENID;
   if (!coachId) {

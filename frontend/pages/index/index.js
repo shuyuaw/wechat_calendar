@@ -45,13 +45,16 @@ Page({
             console.log('Received slots:', data);
             const weekDays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
             const formattedSlots = data.map(slot => {
-                const startDate = new Date(slot.startTime);
-                const endDate = new Date(slot.endTime);
+                // Parse UTC times from backend and display in local timezone
+                const startDate = new Date(slot.startTime); // This will parse the UTC string and convert to local Date object
+                const endDate = new Date(slot.endTime);     // This will parse the UTC string and convert to local Date object
+                
                 const year = startDate.getFullYear();
                 const month = (startDate.getMonth() + 1).toString().padStart(2, '0');
                 const day = startDate.getDate().toString().padStart(2, '0');
                 const dayOfWeek = weekDays[startDate.getDay()];
                 const displayDate = `${year}-${month}-${day} ${dayOfWeek}`;
+                
                 const startHours = startDate.getHours().toString().padStart(2, '0');
                 const startMinutes = startDate.getMinutes().toString().padStart(2, '0');
                 const endHours = endDate.getHours().toString().padStart(2, '0');
@@ -92,6 +95,9 @@ Page({
         const { slotId, startTime } = event.currentTarget.dataset;
         const openid = app.globalData.openid;
         const userInfo = app.globalData.userInfo;
+        
+        // Convert startTime to local string for display in modal
+        const formattedDisplayTime = startTime ? new Date(startTime).toLocaleString() : '这个时段';
 
         if (!openid) {
             wx.showToast({ title: '请先登录', icon: 'none' });
@@ -135,7 +141,6 @@ Page({
     },
 
     proceedWithBooking: function(slotId, startTime, openid) {
-        const formattedDisplayTime = startTime ? new Date(startTime).toLocaleString() : '这个时段';
         wx.showModal({
             title: '确认预约',
             content: `您确定要预约 ${formattedDisplayTime} 吗？`,
