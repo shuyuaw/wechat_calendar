@@ -1,4 +1,4 @@
-// backend/controllers/auth.controller.js
+// backend/controllers/auth.controller.js 
 const axios = require('axios');
 const pool = require('../database.js'); // Use the new MySQL pool
 const jwt = require('jsonwebtoken');
