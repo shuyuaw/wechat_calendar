@@ -18,7 +18,13 @@ const {
     endOfDay,
     format: formatDate, // Use format for consistency
 } = require('date-fns');
-const { utcToZonedTime, zonedTimeToUtc, formatInTimeZone } = require('date-fns-tz');
+// MODIFICATION START: Aliased date-fns-tz function names
+const {
+  toZonedTime:   utcToZonedTime,
+  fromZonedTime: zonedTimeToUtc,
+  formatInTimeZone,
+} = require('date-fns-tz');
+// MODIFICATION END
 
 // Authorization Helper - no changes needed here
 const checkCoachAuthorization = (req, res) => {
