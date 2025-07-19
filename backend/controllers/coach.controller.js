@@ -1,3 +1,5 @@
+console.log("--- RUNNING LATEST coach.controller.js v3 ---"); // Our new version log
+
 // backend/controllers/coach.controller.js
 const pool = require('../database.js'); // Use the new MySQL pool
 const {
