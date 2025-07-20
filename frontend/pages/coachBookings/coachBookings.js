@@ -1,5 +1,6 @@
 // frontend/pages/coachBookings/coachBookings.js
 const { request } = require('../../utils/request.js');
+const { formatBookingDisplay } = require('../../utils/time.js');
 const app = getApp();
 
 const formatDate = (date) => {
@@ -62,10 +63,9 @@ Page({
                 }
 
                 const formattedBookings = bookingsToDisplay.map(booking => {
-                    const startTimeShort = booking.startTime ? booking.startTime.substring(11, 16) : 'N/A';
-                    const endTimeShort = booking.endTime ? booking.endTime.substring(11, 16) : 'N/A';
-                    const displayDate = booking.startTime ? booking.startTime.substring(0, 10) : 'N/A';
-                    return { ...booking, displayStartTime: startTimeShort, displayEndTime: endTimeShort, displayDate: displayDate };
+                    const { displayDate, displayTime } = formatBookingDisplay(booking.startTime, booking.endTime);
+                    const [displayStartTime, displayEndTime] = displayTime.split(' - ');
+                    return { ...booking, displayStartTime, displayEndTime, displayDate };
                 });
 
                 this.setData({
