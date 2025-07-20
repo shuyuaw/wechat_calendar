@@ -89,14 +89,12 @@ Page({
         });
     },
 
-    handleBookSlot: function (event) {
+    handleBookSlot: async function (event) {
         if (this.data.isLoading) return;
 
         const { slotId, startTime } = event.currentTarget.dataset;
         const openid = app.globalData.openid;
-        const userInfo = app.globalData.userInfo;
         
-        // Convert startTime to local string for display in modal
         const formattedDisplayTime = startTime ? new Date(startTime).toLocaleString() : '这个时段';
 
         if (!openid) {
@@ -104,40 +102,45 @@ Page({
             return;
         }
 
-        if (!userInfo || !userInfo.nickName) {
-            wx.showModal({
-                title: '需要您的微信昵称',
-                content: '为了更好地为您服务，请授权获取您的微信昵称。',
-                success: (modalRes) => {
-                    if (modalRes.confirm) {
-                        wx.getUserProfile({
-                            desc: '用于预约时显示您的昵称',
-                            success: profileRes => {
-                                app.globalData.userInfo = profileRes.userInfo;
+        try {
+            let userInfo = app.globalData.userInfo;
 
-                                // --- FIXED: Use the request utility to update user info ---
-                                request({
-                                    url: '/login',
-                                    method: 'POST',
-                                    data: { openid: openid, userInfo: profileRes.userInfo },
-                                    requiresAuth: false
-                                })
-                                .then(() => {
-                                    console.log('User info updated on backend. Proceeding with booking.');
-                                    this.proceedWithBooking(slotId, startTime, openid, formattedDisplayTime);
-                                })
-                                .catch(err => {
-                                    console.error('Failed to update user info on backend:', err);
-                                    wx.showToast({ title: '更新信息失败，请重试', icon: 'none' });
-                                });
-                            }
-                        });
-                    }
-                }
-            });
-            return;
+            if (!userInfo || !userInfo.nickName) {
+                const modalRes = await new Promise(resolve => wx.showModal({
+                    title: '需要您的微信昵称',
+                    content: '为了更好地为您服务，请授权获取您的微信昵称。',
+                    success: resolve,
+                }));
+
+                if (!modalRes.confirm) return;
+
+                const profileRes = await new Promise((resolve, reject) => wx.getUserProfile({
+                    desc: '用于预约时显示您的昵称',
+                    success: resolve,
+                    fail: reject,
+                }));
+                
+                app.globalData.userInfo = profileRes.userInfo;
+                userInfo = profileRes.userInfo;
+
+                await request({
+                    url: '/login',
+                    method: 'POST',
+                    data: { openid: openid, userInfo: userInfo },
+                    requiresAuth: false
+                });
+                console.log('User info updated on backend.');
+            }
+
+            this.proceedWithBooking(slotId, startTime, openid, formattedDisplayTime);
+
+        } catch (err) {
+            console.error('Error during booking process:', err);
+            const title = err.errMsg && err.errMsg.includes('fail auth deny') 
+                ? '授权失败' 
+                : '操作失败，请重试';
+            wx.showToast({ title: title, icon: 'none' });
         }
-        this.proceedWithBooking(slotId, startTime, openid, formattedDisplayTime);
     },
 
     proceedWithBooking: function(slotId, startTime, openid, formattedDisplayTime) {
