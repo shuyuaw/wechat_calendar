@@ -28,27 +28,17 @@ const createBooking = async (req, res) => {
         const [slotRows] = await connection.query(getSlotDetailsSql, [slotIdNum]);
         const slotDetails = slotRows[0];
 
-        // --- DIAGNOSTIC LOGGING START ---
-        console.log('--- DIAGNOSING createBooking ---');
-        console.log('Raw slotDetails from DB:', slotDetails);
-        if (slotDetails) {
-            console.log('Type of slotDetails.startTime:', typeof slotDetails.startTime, '| Is it a Date object?', slotDetails.startTime instanceof Date);
-            console.log('Value of slotDetails.startTime:', slotDetails.startTime);
-        }
-        console.log('--- DIAGNOSING createBooking END ---');
-        // --- DIAGNOSTIC LOGGING END ---
-
         if (!slotDetails) { throw new Error('Could not find slot details after update.'); }
 
-        // The rest of the function has a logic error in the ordering.
-        // For now, let's just get the log output. We will fix the order later.
-        
+        const [userRows] = await connection.query("SELECT nickName FROM Users WHERE userId = ?", [userId]);
+        const userNickName = userRows.length > 0 ? userRows[0].nickName : '空用户名';
+
         const bookingStartTime = slotDetails.startTime;
         const bookingEndTime = slotDetails.endTime;
         const formattedTimeSlot = `${formatDate(bookingStartTime, 'MM月dd日 HH:mm')}-${formatDate(bookingEndTime, 'HH:mm')}`;
 
-        const insertBookingSql = `INSERT INTO Bookings (userId, coachId, slotId, startTime, endTime, status) VALUES (?, ?, ?, ?, ?, 'confirmed')`;
-        const [insertResult] = await connection.query(insertBookingSql, [userId, slotDetails.coachId, slotIdNum, slotDetails.startTime, slotDetails.endTime]);
+        const insertBookingSql = `INSERT INTO Bookings (userId, coachId, slotId, startTime, endTime, status, userNickName) VALUES (?, ?, ?, ?, ?, 'confirmed', ?)`;
+        const [insertResult] = await connection.query(insertBookingSql, [userId, slotDetails.coachId, slotIdNum, slotDetails.startTime, slotDetails.endTime, userNickName]);
         const newBookingId = insertResult.insertId;
 
         const linkBookingSql = "UPDATE AvailabilitySlots SET bookingId = ? WHERE slotId = ?";

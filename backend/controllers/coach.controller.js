@@ -176,9 +176,8 @@ const getCoachBookingsForDate = async (req, res) => {
 
     try {
         const sql = `
-            SELECT b.bookingId, b.slotId, b.startTime, b.endTime, b.status, b.userId, u.nickName AS userNickName
-            FROM Bookings b
-            LEFT JOIN Users u ON b.userId = u.userId
+            SELECT b.bookingId, b.slotId, b.startTime, b.endTime, b.status, b.userId, b.userNickName
+            FROM Bookings AS b
             WHERE b.coachId = ? AND b.startTime >= ? AND b.startTime <= ? AND b.status = 'confirmed'
             ORDER BY b.startTime ASC
         `;
@@ -197,11 +196,10 @@ const getAllCoachBookings = async (req, res) => {
 
     try {
         const sql = `
-            SELECT b.bookingId, b.slotId, b.startTime, b.endTime, b.status, b.userId, u.nickName AS userNickName
-            FROM Bookings b
-            LEFT JOIN Users u ON b.userId = u.userId
-            WHERE b.coachId = ? AND b.status = 'confirmed'
-            ORDER BY b.startTime ASC
+            SELECT bookingId, slotId, startTime, endTime, status, userId, userNickName
+            FROM Bookings
+            WHERE coachId = ? AND status = 'confirmed'
+            ORDER BY startTime ASC
         `;
         const [rows] = await pool.query(sql, [coachOpenId]);
         res.status(200).json(rows);

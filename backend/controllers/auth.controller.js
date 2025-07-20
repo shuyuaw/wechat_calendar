@@ -28,13 +28,14 @@ const processLoginAndGenerateToken = async (openid, nickName, res) => {
 
     if (!userRow) {
       // User not found, insert new user
-      console.log(`User ${openid} not found. Inserting new user with nickname: ${nickName}`);
+      const finalNickName = nickName || '空用户名';
+      console.log(`User ${openid} not found. Inserting new user with nickname: ${finalNickName}`);
       const insertUserSql = "INSERT INTO Users (userId, nickName) VALUES (?, ?)";
-      await pool.query(insertUserSql, [openid, nickName]);
+      await pool.query(insertUserSql, [openid, finalNickName]);
       console.log(`User ${openid} inserted successfully.`);
     } else if (nickName && userRow.nickName !== nickName) {
       // User found, update nickname if provided and different
-      console.log(`User ${openid} found. Updating nickname to: ${nickName}`);
+      console.log(`[BE] Updating nickname for user ${openid} from "${userRow.nickName}" to "${nickName}".`);
       const updateUserSql = "UPDATE Users SET nickName = ? WHERE userId = ?";
       await pool.query(updateUserSql, [nickName, openid]);
       console.log(`User ${openid} nickname updated successfully.`);
