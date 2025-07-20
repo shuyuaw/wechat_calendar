@@ -1,8 +1,8 @@
 // utils/request.js
 
 // TODO: Replace with your actual backend base URL
-const BASE_URL = 'https://my-backend-174013-5-1353418826.sh.run.tcloudbase.com/api'; // Note: Includes '/api' prefix
-// const BASE_URL = 'http://localhost:3001/api';
+// const BASE_URL = 'https://my-backend-174013-5-1353418826.sh.run.tcloudbase.com/api'; // Note: Includes '/api' prefix
+const BASE_URL = 'http://localhost:3001/api';
 
 /**
  * Makes an authenticated request to the backend API.

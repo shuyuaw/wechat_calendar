@@ -149,11 +149,12 @@ Page({
             content: `您确定要预约 ${formattedDisplayTime} 吗？`,
             success: (res) => {
                 if (res.confirm) {
-                    const tmplId_booking_confirmation = 'YOUR_TEMPLATE_ID_HERE'; // Replace
-                    const tmplId_booking_reminder = 'YOUR_TEMPLATE_ID_HERE'; // Replace
+                    const tmplId_booking_confirmation = 'Bai8NNhUQlXdOJaMrMIUv5bblC_W7wb9w3G9c-Ylip0';
+                    const tmplId_booking_cancel = 'azP4v48iJE9jwlqYZuXJ7nHgXUSxUdd8ulUvzK19-sM';
+                    const tmplId_booking_reminder = 'YUu-DQjYHd8zUmQdgR5k98fhV7ojQsDYkX_lL-5pfB0';
 
                     wx.requestSubscribeMessage({
-                        tmplIds: [tmplId_booking_confirmation, tmplId_booking_reminder],
+                        tmplIds: [tmplId_booking_confirmation, tmplId_booking_cancel, tmplId_booking_reminder],
                         complete: () => {
                             console.log('Proceeding to callCreateBookingApi for slot:', slotId);
                             this.callCreateBookingApi(slotId, openid);

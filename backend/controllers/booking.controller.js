@@ -47,20 +47,24 @@ const createBooking = async (req, res) => {
         await connection.commit();
 
         // Send notifications after commit
-        const bookingConfirmationTemplateId = process.env.WECHAT_BOOKING_CONFIRM_TEMPLATE_ID || 'YOUR_TEMPLATE_ID_HERE';
-        sendSubscribeMessage({
-            recipientOpenId: userId,
-            templateId: bookingConfirmationTemplateId,
-            dataPayload: { "thing1": { "value": "职业发展辅导预约" }, "thing13": { "value": formattedTimeSlot } },
-            pageLink: 'pages/myBookings/myBookings'
-        });
-        if (slotDetails.coachId) {
+        const bookingConfirmationTemplateId = process.env.WECHAT_BOOKING_CONFIRM_TEMPLATE_ID;
+        if (bookingConfirmationTemplateId && bookingConfirmationTemplateId !== 'your_booking_confirmation_template_id') {
             sendSubscribeMessage({
-                recipientOpenId: slotDetails.coachId,
+                recipientOpenId: userId,
                 templateId: bookingConfirmationTemplateId,
-                dataPayload: { "thing1": { "value": "新的辅导预约" }, "thing13": { "value": formattedTimeSlot } },
-                pageLink: 'pages/coachBookings/coachBookings'
+                dataPayload: { "thing1": { "value": "职业发展辅导预约" }, "thing13": { "value": formattedTimeSlot } },
+                pageLink: 'pages/myBookings/myBookings'
             });
+            if (slotDetails.coachId) {
+                sendSubscribeMessage({
+                    recipientOpenId: slotDetails.coachId,
+                    templateId: bookingConfirmationTemplateId,
+                    dataPayload: { "thing1": { "value": "新的辅导预约" }, "thing13": { "value": formattedTimeSlot } },
+                    pageLink: 'pages/coachBookings/coachBookings'
+                });
+            }
+        } else {
+            console.log("Booking confirmation template ID not configured. Skipping notification.");
         }
 
         res.status(201).json({
@@ -124,19 +128,23 @@ const cancelBooking = async (req, res) => {
 
         await connection.commit();
 
-        const cancellationTemplateId = 'YOUR_CANCELLATION_TEMPLATE_ID_HERE';
-        const formattedTimeSlot = `${formatDate(booking.startTime, 'MM月dd日 HH:mm')}`;
-        const cancellationReason = newStatus === 'cancelled_by_user' ? '用户主动取消' : '教练取消了此预约';
-        
-        const messageData = {
-            "thing1": { "value": "辅导预约已取消" },
-            "thing4": { "value": cancellationReason },
-            "thing8": { "value": formattedTimeSlot }
-        };
+        const cancellationTemplateId = process.env.WECHAT_BOOKING_CANCEL_TEMPLATE_ID;
+        if (cancellationTemplateId && cancellationTemplateId !== 'your_booking_cancellation_template_id') {
+            const formattedTimeSlot = `${formatDate(booking.startTime, 'MM月dd日 HH:mm')}`;
+            const cancellationReason = newStatus === 'cancelled_by_user' ? '用户主动取消' : '教练取消了此预约';
+            
+            const messageData = {
+                "thing1": { "value": "辅导预约已取消" },
+                "thing4": { "value": cancellationReason },
+                "thing8": { "value": formattedTimeSlot }
+            };
 
-        sendSubscribeMessage({ recipientOpenId: booking.userId, templateId: cancellationTemplateId, dataPayload: messageData, pageLink: 'pages/myBookings/myBookings' });
-        if (booking.coachId) {
-            sendSubscribeMessage({ recipientOpenId: booking.coachId, templateId: cancellationTemplateId, dataPayload: messageData, pageLink: 'pages/coachBookings/coachBookings' });
+            sendSubscribeMessage({ recipientOpenId: booking.userId, templateId: cancellationTemplateId, dataPayload: messageData, pageLink: 'pages/myBookings/myBookings' });
+            if (booking.coachId) {
+                sendSubscribeMessage({ recipientOpenId: booking.coachId, templateId: cancellationTemplateId, dataPayload: messageData, pageLink: 'pages/coachBookings/coachBookings' });
+            }
+        } else {
+            console.log("Booking cancellation template ID not configured. Skipping notification.");
         }
 
         res.status(200).json({ message: 'Booking cancelled successfully.' });
