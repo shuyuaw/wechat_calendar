@@ -124,7 +124,7 @@ Page({
                                 })
                                 .then(() => {
                                     console.log('User info updated on backend. Proceeding with booking.');
-                                    this.proceedWithBooking(slotId, startTime, openid);
+                                    this.proceedWithBooking(slotId, startTime, openid, formattedDisplayTime);
                                 })
                                 .catch(err => {
                                     console.error('Failed to update user info on backend:', err);
@@ -137,10 +137,10 @@ Page({
             });
             return;
         }
-        this.proceedWithBooking(slotId, startTime, openid);
+        this.proceedWithBooking(slotId, startTime, openid, formattedDisplayTime);
     },
 
-    proceedWithBooking: function(slotId, startTime, openid) {
+    proceedWithBooking: function(slotId, startTime, openid, formattedDisplayTime) {
         wx.showModal({
             title: '确认预约',
             content: `您确定要预约 ${formattedDisplayTime} 吗？`,
