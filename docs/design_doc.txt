@@ -49,7 +49,8 @@
         * **删除现有时段:** 移除该教练所有 `status='available'`的记录。
         * **生成新的未来时段:** 根据新的 `weeklyTemplate` 和 `sessionDurationMinutes`，生成新的 `AvailabilitySlots` 记录。关键点在于，只生成 `startTime` 大于或等于当前时间戳的时段。对于这些新生成的未来时段，将其 `status` 设置为 'available'。
         * **(可选，为清晰起见推荐):** 如果需要完整的历史记录，可以考虑为历史上从未被预订过的时段定义一个类似 'past_unbooked' 的状态。否则，这些时段要么不被生成，要么在初始删除时如果属于 'available' 类别则被删除。
-    * **例外处理：** 教练以"特殊学员"身份登录前端，通过正常的预约流程来"占用"某个 `available` 的 slot（使其变为 `booked`），或通过特殊权限（后端 API 判断调用者为教练）取消某个非自己预约的 `booked` slot（使其变为 `available`）。
+    * **例外处理：** 教练可以登录前端，通过正常的预约流程来"占用"某个 `available` 的 slot（使其变为 `booked`），作为预留或休息时间。
+* **教练取消预约：** 教练有权取消任何已存在的预约。这通过在 `cancelBooking` API 中进行权限检查来实现。如果调用者是教练，API将允许取消操作。
 * **学员查看可用时间：**
     * 前端界面：提供月视图日历，可左右滑动切换月份。日期下方标记是否有空闲时段。
     * 点击日期，向后端请求该天的 `AvailabilitySlots` 列表。
@@ -70,7 +71,7 @@
 * **取消预约逻辑：**
     * 前端：用户点击取消，调用后端 `cancelBooking` API。
     * 后端 (`cancelBooking` API):
-        1.  验证用户登录状态和权限（只能取消自己的预约，或教练取消任意预约）。
+        1.  验证用户登录状态和权限。API会检查调用者是预约的创建者（学员）还是系统的教练。
         2.  获取 `bookingId`。
         3.  更新 `Bookings` 记录，设置 `status='cancelled_by_user'` (或 `_by_coach`)。
         4.  根据 `bookingId` 找到关联的 `slotId`。
