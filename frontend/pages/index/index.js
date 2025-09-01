@@ -60,10 +60,13 @@ Page({
                 const endHours = endDate.getHours().toString().padStart(2, '0');
                 const endMinutes = endDate.getMinutes().toString().padStart(2, '0');
                 const displayTime = `${startHours}:${startMinutes} - ${endHours}:${endMinutes}`;
-                return { ...slot, displayDate, displayTime };
+                return { ...slot, displayDate, displayTime, endDate }; // Include endDate for client-side filtering
             });
 
-            const grouped = formattedSlots.reduce((acc, slot) => {
+            const now = new Date();
+            const futureSlots = formattedSlots.filter(slot => new Date(slot.endDate) > now);
+
+            const grouped = futureSlots.reduce((acc, slot) => {
                 const group = acc.find(g => g.date === slot.displayDate);
                 if (group) {
                     group.slots.push(slot);
