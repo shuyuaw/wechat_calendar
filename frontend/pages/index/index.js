@@ -155,7 +155,14 @@ Page({
 
                     wx.requestSubscribeMessage({
                         tmplIds: [tmplId_booking_confirmation, tmplId_booking_cancel, tmplId_booking_reminder],
-                        complete: () => {
+                        complete: (res) => {
+                            console.log('wx.requestSubscribeMessage complete callback result:', res);
+                            // Check if the user granted permission for the confirmation template
+                            if (res[tmplId_booking_confirmation] === 'accept') {
+                                console.log('User accepted booking confirmation subscription.');
+                            } else {
+                                console.log('User denied or ignored booking confirmation subscription.');
+                            }
                             console.log('Proceeding to callCreateBookingApi for slot:', slotId);
                             this.callCreateBookingApi(slotId, openid);
                         }
@@ -166,8 +173,10 @@ Page({
     },
     
     callCreateBookingApi: function (slotId, userId) {
+        console.log('callCreateBookingApi: Showing loading indicator...');
         wx.showLoading({ title: '正在预约...' });
         this.setData({ isLoading: true });
+        console.log('callCreateBookingApi: isLoading set to true.');
 
         // --- FIXED: Use the request utility ---
         request({
@@ -180,21 +189,33 @@ Page({
             requiresAuth: true // Booking requires a token
         })
         .then(response => {
+            console.log('callCreateBookingApi: Booking API response received (success).');
+            wx.hideLoading(); // Hide loading before showing toast
+            console.log('callCreateBookingApi: Loading indicator hidden.');
             console.log('Booking API response:', response);
+            console.log('callCreateBookingApi: Showing success toast.');
             wx.showToast({ title: '预约成功!', icon: 'success' });
-            this.fetchAvailableSlots(); // Refresh the list
+            // Introduce a delay to allow the toast to be visible before refreshing slots
+            setTimeout(() => {
+                this.fetchAvailableSlots(); // Refresh the list
+            }, 1000); 
         })
         .catch(err => {
+            console.log('callCreateBookingApi: Booking API request failed (error).');
+            wx.hideLoading(); // Hide loading before showing toast
+            console.log('callCreateBookingApi: Loading indicator hidden.');
             console.error('Booking API request failed:', err);
             if (err.statusCode === 409) {
+                console.log('callCreateBookingApi: Showing conflict toast.');
                 wx.showToast({ title: '手慢了，时段已被预约', icon: 'none' });
                 this.fetchAvailableSlots();
             } else {
+                console.log('callCreateBookingApi: Showing generic error toast.');
                 wx.showToast({ title: '预约失败，请重试', icon: 'none' });
             }
         })
         .finally(() => {
-            wx.hideLoading();
+            console.log('callCreateBookingApi: Finally block executed. Setting isLoading to false.');
             this.setData({ isLoading: false });
         });
     },
