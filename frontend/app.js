@@ -11,6 +11,12 @@ App({
 
   onLaunch() {
     console.log('App Launching...');
+
+    wx.cloud.init({
+      env: 'prod-3gqepqc5a8fae8a2',
+      traceUser: true,
+    });
+    
     this.loginUser();
   },
 
